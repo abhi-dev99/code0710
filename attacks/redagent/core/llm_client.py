@@ -95,12 +95,29 @@ class LLMClient:
         temperature: float = 0.8,
         json_mode: bool = False,
     ) -> str:
-        model = self._models.get(tier) or self._fallback_model()
+        """Attempt models in failover order. Model strings may be comma-separated
+        chains, e.g. 'model-a:free, model-b:free' — on upstream 429 (saturated
+        shared pool) the next model in the chain is tried."""
+        chain = [m.strip() for m in (self._models.get(tier) or self._fallback_model()).split(",") if m.strip()]
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": user})
 
+        last_err: Exception | None = None
+        for model in chain:
+            try:
+                return await self._complete_with_model(model, messages, temperature, json_mode)
+            except LLMError as e:
+                last_err = e
+                if "429" not in str(e):
+                    raise  # non-rate-limit errors are not fixed by another model
+                print(f"[llm] {model} rate-limited upstream — failing over")
+        raise LLMError(f"All models in chain failed: {last_err}")
+
+    async def _complete_with_model(
+        self, model: str, messages: list[dict[str, str]], temperature: float, json_mode: bool
+    ) -> str:
         body: dict[str, Any] = {
             "model": model,
             "messages": messages,
