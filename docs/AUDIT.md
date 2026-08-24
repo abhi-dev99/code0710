@@ -1,4 +1,4 @@
-# AUDIT — Vendored ARGUS code & code0710 foundations
+# AUDIT — Vendored ARGUS code & livefire foundations
 
 Date: 2026-08-24. Auditor stance: hostile review. Every finding below is either FIXED,
 POLICY-GATED, or ACCEPTED-WITH-DOCUMENTATION.
@@ -16,7 +16,7 @@ POLICY-GATED, or ACCEPTED-WITH-DOCUMENTATION.
 | A7 | `merchant_risk_score` silently defaults 0.15 when absent. | 🟡 | Same treatment as A1 family: missing-data flags, no silent defaults in our own code paths. |
 | A8 | `extract_features_batch` is row-wise Python looping (~1k txn/s). Unusable at our throughput targets. | 🟠 | Superseded: hot-path batch featurization is Phase C work (vectorized numpy); `defense/features/hotpath.py`. |
 
-## B. Flaws found in code0710's own first-pass code (all FIXED)
+## B. Flaws found in livefire's own first-pass code (all FIXED)
 
 | # | Finding | Fix |
 |---|---|---|
@@ -35,7 +35,7 @@ POLICY-GATED, or ACCEPTED-WITH-DOCUMENTATION.
 
 ## D. Standing rules resulting from this audit
 
-1. No silent defaults in any code0710-original feature path.
+1. No silent defaults in any livefire-original feature path.
 2. Profiles mandatory in train AND serve; missing-profile rows reported separately.
 3. `dataset_config.py` is sole config authority; `transaction_gen.py` quarantined.
 4. Temporal splits wherever a time axis exists.

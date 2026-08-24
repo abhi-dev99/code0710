@@ -1,4 +1,4 @@
-# code0710 — Adversarial Co-Evolution Arena for Payment Security
+# LiveFire — Adversarial Co-Evolution Arena for Payment Security
 
 > Mastercard Innovation Challenge @ GFF 2026 · AI Defense Lab for Payment Security
 
