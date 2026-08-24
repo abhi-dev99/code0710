@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiveFire — Adversarial Co-Evolution Arena</title>
+<style>
+:root{--bg:#0b0e14;--panel:#131824;--panel2:#1a2132;--line:#232c40;--txt:#e8ecf4;--mut:#8b96ad;--red:#ff5c5c;--blue:#4da3ff;--green:#3ddc84;--amber:#ffb84d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.5 "Segoe UI",system-ui,sans-serif;padding:24px;max-width:1280px;margin:auto}
+header{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+.logo{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#ff5c5c,#ffb84d);display:flex;align-items:center;justify-content:center;font-size:22px}
+h1{font-size:22px;font-weight:600}
+h1 span{color:var(--mut);font-weight:400;font-size:13px;display:block}
+.badge{margin-left:auto;font-size:12px;color:var(--mut);border:1px solid var(--line);border-radius:20px;padding:4px 12px}
+.grid{display:grid;grid-template-columns:340px 1fr;gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
+.panel h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin-bottom:12px}
+label{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}
+select,input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:13px}
+.checks{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer;user-select:none;color:var(--mut)}
+.chip.on{border-color:var(--red);color:var(--red);background:rgba(255,92,92,.08)}
+button{width:100%;margin-top:14px;background:linear-gradient(135deg,#ff5c5c,#ff8a3d);border:0;color:#fff;font-weight:600;font-size:14px;border-radius:8px;padding:11px;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}
+button.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--txt);font-weight:400}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.metric{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.metric .v{font-size:24px;font-weight:700}
+.metric .k{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.g{color:var(--green)}.b{color:var(--blue)}.r{color:var(--red)}.a{color:var(--amber)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--mut);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid var(--line)}
+.why{background:var(--panel2);border-left:3px solid var(--blue);border-radius:6px;padding:10px 12px;font-size:13px;color:var(--mut);margin-top:10px}
+.why b{color:var(--txt)}
+#err{color:var(--red);font-size:13px;margin-top:10px;display:none}
+.muted{color:var(--mut);font-size:12px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.grid,.row2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🔥</div>
+  <h1>LiveFire <span>Adversarial Co-Evolution Arena · red team generates GenAI fraud · blue team detects · SHAP feeds the mutation loop</span></h1>
+  <div class="badge" id="health">connecting…</div>
+</header>
+
+<div class="grid">
+<div>
+  <div class="panel">
+    <h2>Run an Arena Round</h2>
+    <label>Rail profile</label>
+    <select id="profile"></select>
+    <label>Attack vectors (last selected = held out for cross-vector eval)</label>
+    <div class="checks" id="vectors"></div>
+    <label>Benign transactions (real-corpus anchored)</label>
+    <input type="number" id="nbenign" value="2400" min="400" max="20000" step="200">
+    <label><input type="checkbox" id="usellm" style="width:auto"> Use ox-alpha planner (uncheck = deterministic templates)</label>
+    <button id="runBtn" onclick="runRound()">▶ Run Round</button>
+    <button class="ghost" onclick="runMultiRail()">🌐 Multi-Rail Ledger (all profiles)</button>
+    <div id="err"></div>
+  </div>
+  <div class="panel">
+    <h2>Real-Data Credibility (ULB holdout, honest)</h2>
+    <div id="realMetrics" class="muted">loading…</div>
+  </div>
+</div>
+
+<div>
+  <div class="panel">
+    <h2>Round Results</h2>
+    <div id="results" class="muted">No round yet — run one.</div>
+  </div>
+  <div class="row2">
+    <div class="panel"><h2>Robustness Ledger — campaigns</h2><div id="ledger" class="muted">empty</div></div>
+    <div class="panel"><h2>Vector report card</h2><div id="vstats" class="muted">empty</div></div>
+  </div>
+</div>
+</div>
+
+<script>
+let ALL_VECTORS = [];
+const fmtPct = x => (100*parseFloat(x)).toFixed(1)+"%";
+
+async function init(){
+  const [v,p,h] = await Promise.all([
+    fetch("/api/vectors").then(r=>r.json()),
+    fetch("/api/profiles").then(r=>r.json()),
+    fetch("/api/health").then(r=>r.json())
+  ]);
+  ALL_VECTORS = v.vectors;
+  const ps = document.getElementById("profile");
+  for (const [k,vv] of Object.entries(p)) ps.add(new Option(vv.display_name, k));
+  ps.value = "card_intl";
+  const vc = document.getElementById("vectors");
+  ALL_VECTORS.forEach((v,i)=>{
+    const c=document.createElement("span");c.className="chip"+(i<4?" on":"");
+    c.textContent=v.id+" "+v.name;c.onclick=()=>c.classList.toggle("on");vc.appendChild(c);
+  });
+  document.getElementById("health").textContent = `online � ${h.vectors} vectors � ${h.ledger_campaigns} campaigns`;
+  loadReal(); loadLedger();
+}
+async function loadReal(){
+  try{const m=await fetch("/api/real-metrics").then(r=>r.json());
+    document.getElementById("realMetrics").innerHTML =
+      `<div class="metrics" style="margin:0">
+        <div class="metric"><div class="v g">${m.roc_auc}</div><div class="k">ROC-AUC</div></div>
+        <div class="metric"><div class="v b">${m.average_precision}</div><div class="k">Avg Precision</div></div>
+        <div class="metric"><div class="v">${(m.n_test/1000).toFixed(0)}k</div><div class="k">real test txns</div></div>
+      </div><div class="muted">${m.honesty_note}</div>`;
+  }catch(e){document.getElementById("realMetrics").textContent="not trained yet";}
+}
+function selectedVectors(){return [...document.querySelectorAll(".chip.on")].map(c=>c.textContent.split(" ")[0]);}
+async function post(url,body){
+  const r = await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.detail||r.statusText);
+  return j;
+}
+async function runRound(){
+  const btn=document.getElementById("runBtn");btn.disabled=true;document.getElementById("err").style.display="none";
+  try{
+    const s = await post("/api/round",{
+      rail_profile:document.getElementById("profile").value,
+      vector_ids:selectedVectors().length?selectedVectors():null,
+      n_benign:+document.getElementById("nbenign").value,
+      use_llm:document.getElementById("usellm").checked
+    });
+    renderRound(s); loadLedger();
+  }catch(e){const d=document.getElementById("err");d.textContent="? "+e.message;d.style.display="block";}
+  btn.disabled=false;
+}
+async function runMultiRail(){
+  const btn=document.getElementById("runBtn");btn.disabled=true;document.getElementById("err").style.display="none";
+  try{
+    const s = await post("/api/multi-rail",{rail_profile:"card_intl",vector_ids:selectedVectors().length?selectedVectors():null,n_benign:1200});
+    let html="<table><tr><th>Rail</th><th>Held-out det</th><th>Benign FP</th><th>F1</th></tr>";
+    for(const [rail,r] of Object.entries(s)){
+      if(r.error){html+=`<tr><td>${rail}</td><td colspan=3 class=r>${r.error}</td></tr>`;continue;}
+      html+=`<tr><td>${rail}</td><td class=g>${fmtPct(r.held_out_detection_rate)}</td><td>${fmtPct(r.benign_fp_rate)}</td><td>${r.overall.f1}</td></tr>`;
+    }
+    document.getElementById("results").innerHTML=html+"</table><div class='muted' style='margin-top:8px'>Same attack vectors, every rail � attack survival per region is the Robustness Ledger multi-rail story.</div>";
+    loadLedger();
+  }catch(e){const d=document.getElementById("err");d.textContent="? "+e.message;d.style.display="block";}
+  btn.disabled=false;
+}
+function renderRound(s){
+  const o=s.overall;
+  const cards=`<div class="metrics">
+    <div class="metric"><div class="v g">${fmtPct(s.held_out_detection_rate)}</div><div class="k">held-out vector det</div></div>
+    <div class="metric"><div class="v ${s.benign_fp_rate<0.02?'g':'a'}">${fmtPct(s.benign_fp_rate)}</div><div class="k">benign FP</div></div>
+    <div class="metric"><div class="v b">${o.precision}</div><div class="k">precision</div></div>
+    <div class="metric"><div class="v b">${o.recall}</div><div class="k">recall</div></div>
+    <div class="metric"><div class="v">${o.f1}</div><div class="k">F1</div></div>
+  </div>`;
+  const rows=s.vectors.map(v=>`<tr><td>${v.id}</td><td>${v.vector}${v.held_out?' <span class="a">? held-out</span>':''}</td><td>${v.llm_generated?'?? ox-alpha':'? template'}</td><td>${v.n_txns}</td><td class="${v.detection_rate>0.5?'g':v.detection_rate>0.2?'a':'r'}">${fmtPct(v.detection_rate)}</td><td>${v.in_sample?'in-sample':'held-out'}</td></tr>`).join("");
+  document.getElementById("results").innerHTML = cards+
+    `<table><tr><th>ID</th><th>Vector</th><th>Planner</th><th>Txns</th><th>Det rate</th><th>Eval</th></tr>${rows}</table>`+
+    `<div class="why"><b>Why caught (SHAP):</b> ${s.shap_why}</div>`+
+    `<div class="muted" style="margin-top:6px">rail=${s.rail_profile} � blue=${s.blue_version} � held-out vector=${s.held_out_vector}</div>`;
+}
+async function loadLedger(){
+  try{
+    const l=await fetch("/api/ledger").then(r=>r.json());
+    if(!l.campaigns.length){document.getElementById("ledger").textContent="empty";return;}
+    document.getElementById("ledger").innerHTML="<table><tr><th>Vector</th><th>Rail</th><th>Txns</th><th>Det</th></tr>"+
+      l.campaigns.slice(0,12).map(c=>`<tr><td>${c.vector}</td><td>${c.rail_profile}</td><td>${c.n_txns}</td><td class="${c.detection_rate>0.5?'g':c.detection_rate>0.2?'a':'r'}">${fmtPct(c.detection_rate)}</td></tr>`).join("")+"</table>";
+    document.getElementById("vstats").innerHTML="<table><tr><th>Vector</th><th>Attempts</th><th>Avg det</th></tr>"+
+      l.vector_stats.slice(0,12).map(s=>`<tr><td>${s.vector}</td><td>${s.attempts}</td><td class="${s.avg_detection>0.5?'g':s.avg_detection>0.2?'a':'r'}">${fmtPct(s.avg_detection)}</td></tr>`).join("")+"</table>";
+  }catch(e){}
+}
+init();
+</script>
+</body>
+</html>
