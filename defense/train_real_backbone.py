@@ -29,9 +29,9 @@ SEED = 710
 def train_ulb() -> dict:
     train = pd.read_parquet(SPLITS / "ulb_train.parquet")
     test = pd.read_parquet(SPLITS / "ulb_test.parquet")
-    feats = [c for c in train.columns if c not in ("Class",)]
-    Xtr, ytr = train[feats].to_numpy(), train["Class"].to_numpy()
-    Xte, yte = test[feats].to_numpy(), test["Class"].to_numpy()
+    feats = [c for c in train.columns if c not in ("is_fraud",)]
+    Xtr, ytr = train[feats].to_numpy(), train["is_fraud"].to_numpy()
+    Xte, yte = test[feats].to_numpy(), test["is_fraud"].to_numpy()
 
     pos = ytr.sum()
     model = XGBClassifier(
