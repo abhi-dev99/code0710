@@ -1,0 +1,125 @@
+# CHANGELOG — LiveFire (formerly code0710) / MCIC-GFF26
+
+Every decision, change, and event logged here. Newest first.
+
+---
+
+## 2026-08-25 — Identity fix, ox-alpha red brain, atomic-commit protocol
+
+- **GitHub identity fix**: all 8 prior commits were authored under aliases (`code0710` / `livefire`) — history rewritten via `git filter-branch` to `abhi-dev99` + ID-verified noreply email (`180389067+abhi-dev99@users.noreply.github.com`, cross-checked against the GitHub API); backup refs purged; force-pushed (`dd42799`→`15773ad`). Repo-local `user.name`/`user.email` pinned so it cannot regress.
+- **Red brain swapped to `stealth/ox-alpha`** (OpenRouter): 1M context, reasoning mandatory, supported efforts `[max, high, low]`, $0/$0 pricing. Leads BOTH tiers at `LLM_REASONING_EFFORT=max`; nemotron/glm free models demoted to 429-failover. `llm_client.py`: added `reasoning_effort` (env + per-call override → OpenRouter unified `reasoning` param), `json.loads(strict=False)` to tolerate control chars in model JSON.
+- Live-verified across 3 runs: strategy tier at max effort produced high-quality attack generator-parameter plans (~2k reasoning tokens); one run hit a real upstream 429 on ox-alpha and the failover chain fired correctly; bulk tier returned properly-marked SYNTHETIC placeholder templates. Smoke test: `tests/smoke_oxalpha.py`.
+- **Design finding (locked)**: ox-alpha refuses "operational playbook" framings in ~50% of runs but reliably accepts **statistical generator-parameter** schemas (distributions, cardinality, pacing, detector-weakness hypotheses). This is the correct interface anyway (LLM buys the plan, `transaction_weaver` expands CPU-side) → red-agent prompt templates will request generator params, not attack recipes.
+- **PROTOCOL (team directive)**: atomic commits — the smallest possible change is committed AND pushed to `origin/main` immediately, keeping the contribution graph dense. This changelog now lives in-repo (`livefire/CHANGELOG.md`) to feed that; workspace copy retained as archive.
+
+## 2026-08-24 — Planning stage
+
+- Created `mcic-gff26/` workspace with `MASTER_PLAN.md` (10-part master plan).
+- Archived full Kaggle brief + Luma blasts → `kaggle-brief-source.txt`.
+- Reviewed Project ARGUS source (`pre_auth_engine.py`, `fraud_model.py`, `train_model_v4.py` via git). Verdict: solid skeleton, untrustworthy metrics (trained/tested on own simulator output), static defense. Reuse ~30%, rebuild story.
+- Research sweep: search engines partially bot-blocked (Google/DDG CAPTCHA, Mastercard newsroom 403, arXiv lookups unreliable). Verified directly: GFF 2026 theme pillars = Agentic AI / Tokenisation / Quantum (globalfintechfest.com); Mastercard GitHub org incl. `developers-agent-toolkit`, `client-encryption-*`, OAuth signer libs.
+- LOCKED decisions:
+  - TeamName = `code0710`; repo/docx/Kaggle all match.
+  - Real-data-first strategy: ULB creditcardfraud + IEEE-CIS Vesta as real anchors; RBI/NPCI stats for Indian rail params; synthetic used ONLY for attack campaigns (that's the assignment) with provenance fields.
+  - Red agents powered by ox-alpha via OpenRouter behind a provider-agnostic client (env-config).
+  - GCP deployment target (Cloud Run API + frontend, Cloud Storage artifacts); public URL mandatory regardless of demo conditions.
+  - Mastercard stack integration via official `developers-agent-toolkit` + their API conventions.
+- Constraint disclosed to team: this agent cannot spawn subagents; parallelism happens within-turn instead. All work logged here.
+- MASTER_PLAN.md structural repair: overlapping inserts had scrambled section order (Part 8 orphaned after Part 10, duplicated blocks). Rebuilt to correct order (PART 0→10, 279 lines), verified via section scan.
+- SCALE ARCHITECTURE section added (Part 4): event-backbone decoupling, batched LLM plan→template-compilation generation, vectorized scoring, stateless GCP services, honest benchmark labeling. Rationale: team repositioned product from "demo" to "platform Mastercard-scale infrastructure could run".
+- Dropped logistics questions per direction; remaining open item: red-agent trace visibility in UI (default: sanitized).
+
+## 2026-08-24 — Phase A implementation started
+
+- Scaffolded `mcic-gff26/code0710/` (attacks/ defense/ app/ data/ docs/ experiments/ vendor/).
+- Vendored ARGUS modules from git (`feature_extractor.py`, `dataset_config.py`, `upi_fraud_patterns.py`, `transaction_gen.py`) via `git archive` (note: PowerShell pipes mangle tar streams — use `-o file` then extract).
+- `defense/features/extractor.py`: facade over vendored 34-feature extractor + selftest. **Validated live: 34 features, spot-checks correct** (new-device/night/cross-state/composite-risk flags).
+- `attacks/redagent/core/llm_client.py`: OpenAI-compatible client, tiered routing (strategy/bulk), exponential-backoff retries on 429/5xx, JSON mode, concurrency-limited batch calls.
+- `data/download_datasets.py`: kagglehub acquisition of ULB creditcardfraud + IEEE-CIS with SHA-256 manifest.
+- `data/build_splits.py`: seeded (SEED=710) stratified splits, parquet outputs, split manifest — honesty protocol enforced at build time.
+- Environment note: system `python` resolved to ARGUS's broken .venv (Python311 removed). code0710 now has own `.venv` on Python 3.12 (`py -3.12`). Use `.venv\Scripts\python.exe`.
+- Git initialized, first commits on `main`. Repo not yet pushed to GitHub remote.
+
+### Phase A remaining
+- [ ] Push to GitHub remote `code0710`
+- [ ] Run dataset download (needs Kaggle API token + one-time IEEE-CIS rules acceptance in browser)
+- [ ] Build splits, record hashes
+- [ ] LLM smoke test against OpenRouter (needs key in .env)
+
+## 2026-08-24 — Audit pass (triggered by team lead's challenge)
+
+Full hostile audit of vendored ARGUS code + our own first-pass code. Findings & dispositions in `code0710/docs/AUDIT.md`. Highlights:
+- CRITICAL inherited flaw confirmed: ARGUS behavioral features were constants during training (no profiles passed row-wise) but real values at inference → training/serving skew explains its fake metrics. Policy locked: profiles mandatory train+serve, missing-profile rows reported separately.
+- Quarantined `transaction_gen.py`: it duplicates config with divergent values; `dataset_config.py` is sole authority.
+- Fixed 6 flaws in OUR code: missing pyarrow dep (guaranteed crash), random split on temporal IEEE data replaced with time-ordered split, RAM-heavy file copy, batch-failure isolation in LLM client, Retry-After handling, clean model-fallback error.
+- Meta-findings from validation process: (1) PowerShell text edits inject UTF-8 BOM — banned for .py files, use editor or BOM-less write; (2) circular self-validation trap acknowledged — extractor selftest only proves internal consistency, real validation comes from real-data splits.
+- All fixes committed (`5596428`, `38e8061`); working tree clean; llm_client failure-isolation verified live against unreachable endpoint ([None,None] behavior).
+
+## 2026-08-24 — REBRAND: code0710 → **LiveFire**
+
+Name-selection process:
+- Requirement: trademarkable by a US company, tech-component sound, memorable ("cook"). Rejected: sentinel (Microsoft Sentinel/SentinelOne conflicts), crucible (Atlassian), whetstone/forgeline/touchstone (team found them flat).
+- Availability checks run programmatically (TM databases bot-blocked — Justia/TESS/uspto.report/trademarkelite all 403'd; noted, NOT hammering further):
+  - GitHub: "livefire" = 85 repos, largest 12★ → effectively empty namespace. mirage = 5,798 repos incl. 3.5k★ project → rejected. dogfight = small games only.
+  - DNS: `livefire.com` UNREGISTERED; `livefirepay.com`, `getlivefire.com` unregistered; `livefire.ai` taken.
+  - Known usage: VMware "LiveFire" internal training-lab program only — different industry/class, no payments-software conflict known.
+- DECISION: **LiveFire**. Action items for humans: register livefire.com (~$10) ASAP; rename Kaggle team to match repo name per competition rules; formal TESS UI search before any real TM filing.
+- Mechanics: folder renamed via robocopy /MOVE after Rename-Item hit access-denied (persistent shell CWD lock). 2,645 files/395 dirs moved, 0 failures; git history intact (`38e8061` → `ccfec84` rebrand commit); extractor selftest re-passed post-move; zero remaining "code0710" references in README/AUDIT.
+
+## 2026-08-24 — Repo is LIVE
+
+- Pushed to https://github.com/abhi-dev99/livefire — remote HEAD `ccfec84` verified via `git ls-remote`; 23 tracked files; full history intact.
+- Phase B kickoff begins: attack taxonomy registry + constraint engine.
+
+## 2026-08-24 — Data down, keys live, stress suite 10/10
+
+- **ULB dataset downloaded**: 284,807 real card transactions (150MB) → splits built & locked (`SEED=710`, stratified; fraud rate 0.1727% preserved: train 0.1729% / test 0.1720%).
+- **IEEE-CIS blocked**: 403 — competition rules must be accepted once in browser (kaggle.com/competitions/ieee-fraud-detection/rules). Human action pending.
+- **OpenRouter key live**: free-tier account (usage=0, no credits). gpt-4o → 402; switched to free models: strategy=`nemotron-3-super-120b:free`, bulk=`gemma-4-31b:free`.
+- **FIRST LIVE RED-AGENT OUTPUT**: C2 structuring plan returned valid JSON — model self-devised 49999×3 to sit under the ₹50K review threshold. Constraint engine will gate every txn it compiles.
+- **Free-tier lesson learned the hard way**: retry storms burned the ~50/day `:free` quota → persistent 429s. Fixes shipped in `llm_client.py`:
+  - `_RateLimiter`: shared min-interval throttle (3s default for `:free` models, `LLM_MIN_INTERVAL_S` overridable)
+  - 429 circuit breaker: max 2 retries, 30s+ hard backoff (fast retries burn quota and worsen 429s)
+  - `client.last_errors`: failure reasons surfaced for observability
+- **Stress suite** (`tests/stress_test.py`): 10 passed / 0 failed / 1 env-SKIP:
+  - constraint engine fuzzed with 100k garbage txns: zero crashes, ~600k validations/sec, all failure codes firing
+  - extractor: 20k txns → (20000, 34), no NaN/Inf, ~230–310k extractions/sec row-wise
+  - edge cases (₹0, ₹1e9, invalid timestamp) handled
+  - LLM live batch: SKIP (daily quota exhausted — resets daily; adding $10 to OpenRouter raises :free limit to 1000/day and unlocks paid models)
+- Committed `2474e5a`, pushed.
+
+## 2026-08-24 — IEEE unlocked, 429 mystery SOLVED, suite 11/11
+
+- User accepted IEEE-CIS rules → dataset downloaded (590,540 real txns). **Total real data locked: 875,347 transactions.**
+- Temporal split verified mathematically: IEEE train_max TransactionDT=12,192,842 < test_min=12,192,900 — zero time leakage.
+- **429 root cause diagnosed via response-body forensics**: `"limit_source: upstream_provider_shared_pool"` — Google's free pool saturated globally; NOT our quota, NOT our key (user's dashboard confirmed account-level headroom). Earlier self-diagnosis of "daily quota exhausted" was WRONG — corrected here for the record.
+- Fix shipped: **model failover chains** — model strings in `.env` are comma-separated lists; on upstream-429 the client hops to the next model automatically. Strategy chain: nemotron-3-super → glm-5.2 → dots-3. Bulk chain: nemotron-nano → glm-5.2 → nemotron-super.
+- Stress suite re-run: **11/11 PASS** including 3 concurrent live LLM calls (7.2s wall).
+- Committed `dd42799`, pushed; remote verified.
+
+
+
+- `attacks/taxonomy.json`: machine-readable registry, 14 vectors across 5 categories (identity fabrication / social engineering / transaction evasion / **agentic payment attacks** / infrastructure poisoning), each with GenAI component, target rails, detector-observable signals, difficulty + novelty scores. Validated JSON: 14 unique IDs, schema-complete.
+- `attacks/redagent/core/constraint_engine.py`: deterministic realism gate — C1 rail validity, C2 channel-category pairing, C3 channel+category amount bounds, C4 regulatory caps (UPI ₹1L/ATM ₹25K/wallet ₹10K), C5 tz-aware IST timestamps w/ future-date rejection, C6 impossible-travel physics (>950 km/h). Selftest passed: 6 checks exercised incl. adversarial cases. `dataset_config.py` is sole authority per AUDIT rule.
+- Committed & pushed.
+
+### Next up
+- [ ] `transaction_weaver.py` — attack plan → constraint-checked txn sequence compiler
+- [ ] `strategy_memory.py` — SQLite persistence of round outcomes
+- [ ] SHAP-feedback mutation loop wiring
+
+### Still-open human actions
+- [x] OpenRouter key received → stored in `.env` (git-ignored, confirmed)
+- [x] Kaggle API token received (from screenshot) → stored in `.env`
+- [ ] Register livefire.com (~$10)
+- [ ] Rename Kaggle team to LiveFire + all members confirmed
+- [ ] Accept IEEE-CIS competition rules once in browser (kaggle.com/competitions/ieee-fraud-detection/rules) — required for dataset download
+- ⚠️ SECURITY: both keys were pasted in chat; rotate them after the competition (or now if paranoid)
+
+
+
+
+## TODO next (implementation kickoff)
+- [ ] Create GitHub repo `code0710`, push scaffold
+- [ ] Download datasets, hash + lock splits
+- [ ] Build `llm_client.py` + smoke test against OpenRouter
