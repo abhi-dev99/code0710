@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets & local state
+.env
+*.db
+*.sqlite3
+
+# Data — never commit datasets; manifest hashes only
+data/raw/*.csv
+data/raw/*.parquet
+data/splits/*.parquet
+
+# Artifacts
+models/
+*.joblib
+*.onnx
+experiments/results/
+node_modules/
+dist/
+build/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
