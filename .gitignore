@@ -14,8 +14,11 @@ data/raw/*.csv
 data/raw/*.parquet
 data/splits/*.parquet
 
-# Artifacts
-models/
+# Artifacts (model binaries/metrics — never source code)
+defense/models/*.ubj
+defense/models/*.json
+defense/models/*.pkl
+/models/
 *.joblib
 *.onnx
 experiments/results/
