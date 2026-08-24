@@ -121,7 +121,7 @@ def template_plan(vector_id: str, profile_key: str) -> dict[str, Any]:
 
 # ------------------------------------------------------------------ red: LLM
 
-def llm_plan(
+async def _llm_plan_async(
     client: LLMClient, vector_id: str, profile_key: str,
     memory: StrategyMemory | None = None,
 ) -> dict[str, Any]:
@@ -155,12 +155,21 @@ def llm_plan(
         '"entity_cardinality": {"users": int, "devices": int, "merchants": int}, '
         '"amount_jitter_pct": number, "window_h": number, "rationale": str}'
     )
-    raw = client.complete("strategy", system=ARENA_SYSTEM, user=user, json_mode=True)
+    raw = await client.complete("strategy", system=ARENA_SYSTEM, user=user, json_mode=True)
     plan = json.loads(raw, strict=False)
     plan["vector"] = v["name"]
     plan.setdefault("channel", ch.name)
     plan["_llm_generated"] = True
     return plan
+
+
+def llm_plan(
+    client: LLMClient, vector_id: str, profile_key: str,
+    memory: StrategyMemory | None = None,
+) -> dict[str, Any]:
+    """Sync wrapper around the async planner (run_round is sync)."""
+    import asyncio
+    return asyncio.run(_llm_plan_async(client, vector_id, profile_key, memory))
 
 
 # ------------------------------------------------------------- real anchors
@@ -311,6 +320,7 @@ def run_round(
         "benign_fp_rate": fp_rate,
         "shap_why": why,
         "n_benign": n_benign,
+        "_ensemble": ensemble,  # popped by the API layer; never serialized
     }
 
 

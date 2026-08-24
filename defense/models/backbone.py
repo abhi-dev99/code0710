@@ -84,6 +84,7 @@ class BlueEnsemble:
 
     def __init__(self, feature_names: list[str], seed: int = 710):
         self.feature_names = feature_names
+        self.version = BLUE_VERSION
         self.xgb = XGBDetector(seed)
         self.lr = LRDetector(seed)
         self.rules = RulesDetector(feature_names)

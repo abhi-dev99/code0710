@@ -4,6 +4,22 @@ Every decision, change, and event logged here. Newest first.
 
 ---
 
+## 2026-08-25 — FINAL SPRINT: end-to-end product (branch `sprint/final-e2e`)
+
+Full closed-loop product implemented overnight. All commits on the sprint branch.
+
+- **Rail profiles** (`config/rail_profiles.py`): 4 regions — `card_intl` (Mastercard-flavored default), `eu_psd2` (SCA step-up mechanic), `us_cnp` (no SCA), `upi_in` (vendored ARGUS config remains authority). Constraint engine parameterized per rail; legacy UPI behavior back-compat.
+- **Transaction Weaver** (`transaction_weaver.py`): plan JSON → seeded, provenance-tagged, constraint-checked txn streams; deterministic campaign ids (same seed ⇒ same weave); benign generator with home-city-anchored users, 8% plausible travel, ULB-bootstrapped amounts/hours.
+- **Arena features** (`defense/features/arena_features.py`): 15 dims — behavioral + causal velocity windows + entity-graph fan-out. Two real bugs found & fixed en route: cumulative graph features drifted through the stream (→ causal windows); build_features sorted rows breaking label alignment (→ returns original stream order).
+- **Blue ensemble** (`defense/models/backbone.py`): XGB 55% + LR 25% + deterministic rules 20%; disagreement→novelty flag; threshold calibrated on a **held-out benign slice** (in-sample calibration leaked — found & fixed).
+- **Honest real-data anchor**: ULB-native backbone, committed split → **ROC-AUC 0.9852 / AP 0.8738**.
+- **Arena closed loop** (`arena/loop.py`): cross-vector protocol (held-out vector = never-seen family). Template plans: **98% held-out detection, 1.2% benign FP, F1 0.92**. Live ox-alpha plans: **39.5% detection @ 0.8% FP — LLM-generated attacks genuinely evade static defenses**, which is the demo's central narrative and the reason the SHAP mutation loop exists.
+- **Multi-rail ledger**: same vectors across all 4 rails — det 0.90–1.00, FP 0–2%, F1 0.90–1.00.
+- **Product surface** (`app/`): FastAPI (`/api/round`, `/api/multi-rail`, `/api/detect`, `/api/ledger`, `/api/real-metrics`) + dark web dashboard (run rounds from browser, live SHAP why, ledger, vector report card). Verified live via uvicorn.
+- **Tests**: e2e suite 6/6 (profiles, weaver determinism, features, arena round, ledger, API) on top of the 11-check stress suite.
+- **Docs**: README rewritten (claims→evidence table), `docs/ARCHITECTURE.md` (component graph, invariants, failure-mode register), SPRINT_PLAN, LITERATURE.
+- Async bug fixed: planner now awaits `LLMClient.complete` (sync wrapper via asyncio.run).
+
 ## 2026-08-25 — Blue-team stack upgraded: heterogeneous 5-tier ensemble
 
 - Team challenge: "XGBoost too generic." Verdict: GBDT stays as **explainable backbone** (industry standard for tabular fraud; carries SHAP explanations), ensemble diversified around it:
