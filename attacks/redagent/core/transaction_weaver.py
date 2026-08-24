@@ -245,21 +245,47 @@ def generate_benign(
     txns: list[dict[str, Any]] = []
     per_user_prev: dict[str, dict[str, Any]] = {}
     attempts, dropped = 0, 0
+
+    # valid (day_offset, hour) pairs with hour-weight sampling — no future times,
+    # no now-boundary distortion
+    now_d = now.astimezone(tz)
+    candidates: list[tuple[int, int]] = []
+    weights: list[float] = []
+    for day in range(0, 3):
+        for h in range(24):
+            t_c = (now_d - timedelta(days=day)).replace(hour=h, minute=0, second=0)
+            if t_c <= now_d:
+                candidates.append((day, h))
+                weights.append(hw[h])
+    w = np.array(weights, dtype=float)
+    w /= w.sum()
+
+    # home-city anchored users: realistic geo (no continent-hopping every txn)
+    n_users = max(2, n // 3)
+    home_city_idx = rng.choice(len(p.cities), size=n_users, p=city_w)
+
     while len(txns) < n and attempts < n * 3:
         attempts += 1
         ch = p.channels[str(rng.choice(ch_names, p=ch_weights))]
         amt = float(rng.uniform(ch.min_amount, ch.max_amount))
         if pool is not None and len(pool) > 0:
             amt = float(np.clip(pool[int(rng.integers(len(pool)))], ch.min_amount, ch.max_amount))
-        city = p.cities[int(rng.choice(len(p.cities), p=city_w))]
-        hour = int(rng.choice(24, p=hw))
-        t = (now - timedelta(days=int(rng.integers(0, 3)))).replace(
-            hour=hour, minute=int(rng.integers(60)), second=int(rng.integers(60)))
-        if t > now:
-            t = now - timedelta(minutes=int(rng.integers(1, 1440)))
-        uid = f"benign_{p.key}_u{int(rng.integers(1, max(2, n // 8 + 1)))}"
-        lat = float(city["lat"]) + float(rng.normal(0, 0.05))
-        lon = float(city["lon"]) + float(rng.normal(0, 0.05))
+        u_i = int(rng.integers(n_users))
+        uid = f"benign_{p.key}_u{u_i}"
+        home = p.cities[int(home_city_idx[u_i])]
+        # 8% travel txn: another city, otherwise home with small jitter
+        is_travel = rng.random() < 0.08
+        if is_travel:
+            city = p.cities[int(rng.choice(len(p.cities), p=city_w))]
+            lat = float(city["lat"]) + float(rng.normal(0, 0.02))
+            lon = float(city["lon"]) + float(rng.normal(0, 0.02))
+        else:
+            lat = float(home["lat"]) + float(rng.normal(0, 0.05))
+            lon = float(home["lon"]) + float(rng.normal(0, 0.05))
+        city_name = city["name"] if is_travel else home["name"]
+        day, hour = candidates[int(rng.choice(len(candidates), p=w))]
+        t = (now_d - timedelta(days=day)).replace(hour=hour, minute=int(rng.integers(60)),
+                                                  second=int(rng.integers(60)))
         prev = per_user_prev.get(uid)
         dist_km = 0.0
         if prev is not None:
@@ -276,7 +302,7 @@ def generate_benign(
             "amount": round(amt, 2),
             "currency": p.currency,
             "timestamp": t,
-            "city": city["name"],
+            "city": city_name,
             "lat": round(lat, 4),
             "lon": round(lon, 4),
             "location_distance_km": dist_km,

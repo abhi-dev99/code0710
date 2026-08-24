@@ -42,6 +42,7 @@ def build_features(txns: list[dict[str, Any]]) -> pd.DataFrame:
 
     df = pd.DataFrame(txns)
     df["_ts"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["_orig_pos"] = np.arange(len(df))
     df = df.sort_values("_ts").reset_index(drop=True)
     df["hour_frac"] = df["_ts"].apply(lambda t: t.hour + t.minute / 60.0)
     df["epoch_h"] = df["_ts"].apply(_epoch_h)
@@ -90,21 +91,29 @@ def build_features(txns: list[dict[str, Any]]) -> pd.DataFrame:
     out["user_merchants_1h"] = user_merchants
     out["device_cnt_1h"] = device_cnt
 
-    # ---- graph features: shared-device users, merchant fan-out, pair repeats
-    device_users: dict[str, set[str]] = {}
-    merchant_users: dict[str, set[str]] = {}
-    pair_counts: dict[tuple[str, str], int] = {}
+    # ---- graph features: causal-window fan-out (stationary over time,
+    # unlike cumulative counts which drift upward through a stream)
+    device_events: dict[str, list[tuple[float, str]]] = {}
+    merchant_events: dict[str, list[tuple[float, str]]] = {}
+    pair_events: dict[tuple[str, str], list[float]] = {}
     dev_users_col, merch_users_col, pair_col = [], [], []
     for row in df.itertuples(index=False):
-        du = device_users.setdefault(row.device_id, set())
-        du.add(row.user_id)
-        dev_users_col.append(len(du))
-        mu = merchant_users.setdefault(row.merchant_id, set())
-        mu.add(row.user_id)
-        merch_users_col.append(len(mu))
-        k = (row.user_id, row.merchant_id)
-        pair_counts[k] = pair_counts.get(k, 0) + 1
-        pair_col.append(pair_counts[k])
+        eh = row.epoch_h
+        de = device_events.setdefault(row.device_id, [])
+        de[:] = [(t, u) for (t, u) in de if eh - t <= 1.0]
+        de.append((eh, row.user_id))
+        dev_users_col.append(len({u for _, u in de}))
+
+        me = merchant_events.setdefault(row.merchant_id, [])
+        me[:] = [(t, u) for (t, u) in me if eh - t <= 1.0]
+        me.append((eh, row.user_id))
+        merch_users_col.append(len({u for _, u in me}))
+
+        pk = (row.user_id, row.merchant_id)
+        pe = pair_events.setdefault(pk, [])
+        pe[:] = [t for t in pe if eh - t <= 24.0]
+        pair_col.append(len(pe))
+        pe.append(eh)
     out["device_users"] = dev_users_col
     out["merchant_users"] = merch_users_col
     out["user_merchant_repeats"] = pair_col
@@ -112,4 +121,8 @@ def build_features(txns: list[dict[str, Any]]) -> pd.DataFrame:
     # amount ratio (computed in the user loop above)
     out["amt_vs_user_median"] = amt_ratio_vals[: len(out)]
 
-    return out[FEATURE_NAMES].astype(float)
+    out = out[FEATURE_NAMES].astype(float)
+    # return in the ORIGINAL stream order (we computed in time order so the
+    # causal velocity windows see real history; callers index by stream order)
+    return out.set_index(df["_orig_pos"].values).sort_index().set_axis(
+        np.arange(len(out)), axis=0)

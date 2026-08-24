@@ -96,6 +96,13 @@ class BlueEnsemble:
         self.fitted = True
         return self
 
+    def calibrate(self, X_benign: np.ndarray, target_fp: float = 0.02) -> float:
+        """Set threshold on a HELD-OUT benign slice (never trained on) so the
+        FP rate on benign traffic hits the target. Returns the threshold."""
+        s = 0.55 * self.xgb.score(X_benign) + 0.25 * self.lr.score(X_benign)
+        self.threshold = float(max(0.5, np.quantile(s, 1.0 - target_fp)))
+        return self.threshold
+
     def predict(self, X: np.ndarray) -> dict[str, Any]:
         if not self.fitted:
             raise RuntimeError("BlueEnsemble not fitted")
