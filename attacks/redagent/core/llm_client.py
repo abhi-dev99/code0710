@@ -61,6 +61,7 @@ class LLMClient:
         timeout_s: float = 120.0,
         max_retries: int = 5,
         min_interval_s: float = 0.0,
+        reasoning_effort: str | None = None,
     ):
         if not base_url or not api_key:
             raise LLMError("LLM_BASE_URL and LLM_API_KEY must be set (see config/settings.example.env)")
@@ -70,6 +71,7 @@ class LLMClient:
         self._timeout = timeout_s
         self._max_retries = max_retries
         self._limiter = _RateLimiter(min_interval_s)
+        self._reasoning_effort = reasoning_effort  # e.g. "max" | "high" | "low"
         self.last_errors: list[str] = []  # per-call failure reasons from the last complete_many
 
     @classmethod
@@ -84,6 +86,7 @@ class LLMClient:
                 "bulk": os.environ.get("LLM_MODEL_BULK", ""),
             },
             min_interval_s=float(os.environ.get("LLM_MIN_INTERVAL_S", default_interval)),
+            reasoning_effort=(os.environ.get("LLM_REASONING_EFFORT", "").strip() or None),
         )
 
     async def complete(
@@ -94,11 +97,17 @@ class LLMClient:
         user: str = "",
         temperature: float = 0.8,
         json_mode: bool = False,
+        reasoning_effort: str | None = None,
     ) -> str:
         """Attempt models in failover order. Model strings may be comma-separated
         chains, e.g. 'model-a:free, model-b:free' — on upstream 429 (saturated
-        shared pool) the next model in the chain is tried."""
+        shared pool) the next model in the chain is tried.
+
+        reasoning_effort: per-call override for the reasoning budget sent to
+        reasoning models (OpenRouter unified 'reasoning' param). Falls back to
+        LLM_REASONING_EFFORT from the environment."""
         chain = [m.strip() for m in (self._models.get(tier) or self._fallback_model()).split(",") if m.strip()]
+        effort = reasoning_effort or self._reasoning_effort
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -107,7 +116,7 @@ class LLMClient:
         last_err: Exception | None = None
         for model in chain:
             try:
-                return await self._complete_with_model(model, messages, temperature, json_mode)
+                return await self._complete_with_model(model, messages, temperature, json_mode, effort)
             except LLMError as e:
                 last_err = e
                 if "429" not in str(e):
@@ -116,7 +125,8 @@ class LLMClient:
         raise LLMError(f"All models in chain failed: {last_err}")
 
     async def _complete_with_model(
-        self, model: str, messages: list[dict[str, str]], temperature: float, json_mode: bool
+        self, model: str, messages: list[dict[str, str]], temperature: float, json_mode: bool,
+        reasoning_effort: str | None = None,
     ) -> str:
         body: dict[str, Any] = {
             "model": model,
@@ -125,6 +135,9 @@ class LLMClient:
         }
         if json_mode:
             body["response_format"] = {"type": "json_object"}
+        if reasoning_effort:
+            # OpenRouter unified reasoning control; models that don't support it ignore it.
+            body["reasoning"] = {"effort": reasoning_effort}
 
         delay = 1.0
         last_err: Exception | None = None
@@ -176,7 +189,7 @@ class LLMClient:
         kw["json_mode"] = True
         raw = await self.complete(tier, **kw)
         try:
-            return json.loads(raw)
+            return json.loads(raw, strict=False)  # strict=False: tolerate raw control chars in strings
         except json.JSONDecodeError as e:
             raise LLMError(f"Model returned invalid JSON: {raw[:200]}...") from e
 
