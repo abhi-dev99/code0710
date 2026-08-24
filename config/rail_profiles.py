@@ -202,10 +202,12 @@ PROFILES: dict[str, RailProfile] = {
 }
 
 
-def get_profile(key: str | None) -> RailProfile:
-    """Resolve a profile by key; None/'upi_in' → legacy default (back-compat)."""
-    if key is None or key == "upi_in":
+def get_profile(key: "str | RailProfile | None") -> RailProfile:
+    """Resolve a profile by key (or pass-through an instance); None → upi_in."""
+    if key is None:
         return UPI_IN
+    if isinstance(key, RailProfile):
+        return key
     if key not in PROFILES:
         raise KeyError(f"unknown rail profile: {key!r} (have: {sorted(PROFILES)})")
     return PROFILES[key]
