@@ -1,0 +1,12 @@
+{
+  "seed": 710,
+  "test_fraction": 0.2,
+  "ulb_split": "stratified_random (2-day window; no time axis)",
+  "ieee_split": "temporal (train=past, test=latest 20%)",
+  "files": {
+    "ulb_source": {
+      "sha256": "76274b691b16a6c49d3f159c883398e03ccd6d1ee12d9d8ee38f4b4b98551a89",
+      "rows": 284807
+    }
+  }
+}
