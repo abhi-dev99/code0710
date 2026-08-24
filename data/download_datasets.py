@@ -1,12 +1,12 @@
-"""
+﻿"""
 Download REAL anchor datasets.
 
 Requires a free Kaggle API token (kaggle.com/settings -> Create New Token),
 which kagglehub picks up automatically.
 
-Datasets (REAL transactions only — see docs/data_provenance.md):
-1. ULB creditcardfraud   — 284,807 real European card txns, 492 labeled frauds
-2. IEEE-CIS Fraud Detection (Vesta) — ~590k real e-commerce transactions
+Datasets (REAL transactions only â€” see docs/data_provenance.md):
+1. ULB creditcardfraud   â€” 284,807 real European card txns, 492 labeled frauds
+2. IEEE-CIS Fraud Detection (Vesta) â€” ~590k real e-commerce transactions
 
 Usage:
     python data/download_datasets.py
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -47,7 +48,7 @@ def main() -> int:
     ulb_dir = Path(kagglehub.dataset_download("mlg-ulb/creditcardfraud"))
     src = next(ulb_dir.rglob("creditcard.csv"))
     dst = RAW_DIR / "ulb_creditcard.csv"
-    dst.write_bytes(src.read_bytes())
+    shutil.copyfile(src, dst)
     entries[str(dst.relative_to(RAW_DIR))] = {
         "sha256": _sha256(dst), "bytes": dst.stat().st_size,
         "source": "kaggle:mlg-ulb/creditcardfraud", "real_data": True,
@@ -55,6 +56,9 @@ def main() -> int:
     print(f"      saved -> {dst.name} ({entries[str(dst.relative_to(RAW_DIR))]['bytes']:,} B)")
 
     print("[2/2] IEEE-CIS Fraud Detection (train_transaction subset) ...")
+    # NOTE: this fails unless someone on the team accepted the competition
+    # rules once at kaggle.com/competitions/ieee-fraud-detection/rules
+    # while logged in with the same account whose API token kagglehub uses.
     ieee_dir = Path(kagglehub.competition_download("ieee-fraud-detection"))
     # Full set is ~500MB compressed; keep train_transaction.csv as the anchor.
     src = next(ieee_dir.rglob("train_transaction.csv"))

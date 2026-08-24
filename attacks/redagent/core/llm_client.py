@@ -65,7 +65,7 @@ class LLMClient:
         temperature: float = 0.8,
         json_mode: bool = False,
     ) -> str:
-        model = self._models.get(tier) or next(m for m in self._models.values() if m)
+        model = self._models.get(tier) or self._fallback_model()
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -90,16 +90,30 @@ class LLMClient:
                         json=body,
                     )
                     r.raise_for_status()
-                    return r.json()["choices"][0]["message"]["content"]
+                    data = r.json()
+                    usage = data.get("usage") or {}
+                    if usage:
+                        print(f"[llm] {model} tokens in={usage.get('prompt_tokens')} "
+                              f"out={usage.get('completion_tokens')}")
+                    return data["choices"][0]["message"]["content"]
                 except (httpx.HTTPStatusError, httpx.TransportError, KeyError, IndexError) as e:
                     last_err = e
-                    status = getattr(e, "response", None)
-                    retryable = status is None or status.status_code in (429, 500, 502, 503, 529)
+                    resp = getattr(e, "response", None)
+                    status_code = getattr(resp, "status_code", None)
+                    retryable = status_code is None or status_code in (429, 500, 502, 503, 529)
                     if not retryable or attempt == self._max_retries - 1:
                         break
-                    await asyncio.sleep(delay + random.uniform(0, 0.5))
+                    retry_after = resp.headers.get("retry-after") if resp is not None else None
+                    wait = float(retry_after) if retry_after and retry_after.isdigit() else delay
+                    await asyncio.sleep(wait + random.uniform(0, 0.5))
                     delay = min(delay * 2, 30)
         raise LLMError(f"LLM call failed after {self._max_retries} attempts: {last_err}")
+
+    def _fallback_model(self) -> str:
+        for m in self._models.values():
+            if m:
+                return m
+        raise LLMError("No LLM models configured — set LLM_MODEL_STRATEGY / LLM_MODEL_BULK")
 
     async def complete_json(self, tier: str, **kw: Any) -> dict[str, Any]:
         kw["json_mode"] = True
@@ -111,11 +125,17 @@ class LLMClient:
 
     async def complete_many(
         self, tier: str, prompts: list[str], *, max_concurrency: int = 32, **kw: Any
-    ) -> list[str]:
+    ) -> list[str | None]:
+        """Batch completion that never loses siblings on failure: failed prompts
+        return None (bulk generation must survive partial outages)."""
         sem = asyncio.Semaphore(max_concurrency)
 
-        async def one(p: str) -> str:
+        async def one(p: str) -> str | None:
             async with sem:
-                return await self.complete(tier, user=p, **kw)
+                try:
+                    return await self.complete(tier, user=p, **kw)
+                except LLMError as e:
+                    print(f"[llm] prompt failed (isolated): {e}")
+                    return None
 
-        return await asyncio.gather(*(one(p) for p in prompts))
+        return list(await asyncio.gather(*(one(p) for p in prompts)))
