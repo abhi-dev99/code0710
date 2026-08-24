@@ -4,6 +4,17 @@ Every decision, change, and event logged here. Newest first.
 
 ---
 
+## 2026-08-25 — Blue-team stack upgraded: heterogeneous 5-tier ensemble
+
+- Team challenge: "XGBoost too generic." Verdict: GBDT stays as **explainable backbone** (industry standard for tabular fraud; carries SHAP explanations), ensemble diversified around it:
+  1. XGBoost + LR backbone (SHAP explanations)
+  2. **PyTorch Geometric heterogeneous GNN** (card↔device↔merchant↔IP) — counters cross-entity dispersion attacks probed by ox-alpha in smoke tests
+  3. Transformer sequence encoder over per-card txn histories (pacing/burst patterns)
+  4. ox-alpha bulk semantic tier (attack text / merchant descriptors)
+  5. Meta-layer: ensemble disagreement → novelty flag (co-evolution hook feeding the Robustness Ledger)
+- Fallback rule locked: any tier that doesn't beat backbone on honest splits gets cut and the ledger reports it. Adds `torch` + `torch-geometric` deps (~2.5GB install) — accepted.
+- Full test suite re-run green (11/11) incl. 3 concurrent live ox-alpha calls; data splits verified intact.
+
 ## 2026-08-25 — Identity fix, ox-alpha red brain, atomic-commit protocol
 
 - **GitHub identity fix**: all 8 prior commits were authored under aliases (`code0710` / `livefire`) — history rewritten via `git filter-branch` to `abhi-dev99` + ID-verified noreply email (`180389067+abhi-dev99@users.noreply.github.com`, cross-checked against the GitHub API); backup refs purged; force-pushed (`dd42799`→`15773ad`). Repo-local `user.name`/`user.email` pinned so it cannot regress.
