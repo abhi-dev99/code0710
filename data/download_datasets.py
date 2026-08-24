@@ -1,4 +1,4 @@
-﻿"""
+"""
 Download REAL anchor datasets.
 
 Requires a free Kaggle API token (kaggle.com/settings -> Create New Token),
