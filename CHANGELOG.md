@@ -19,6 +19,7 @@ Worked the hostile external audit autonomously, dependency order. All commits at
 - **P2.4 minimum-viable Category D**: `memo_text` on every txn (benign memos vs LLM-injection memos for agentic vectors), heuristic `memo_injection_score` as the **16th feature** — D1/D3 are now representable and detectable end-to-end instead of aspirational.
 - **P3.1 Docker**: `Dockerfile` + `docker-compose.yml` (runtime LLM key injection, ledger volume) — clone → one command → arena at :8000.
 - **Battery at pass end**: E2E 6/6 · tournament 9/9 · stress 11/11 · breakthrough report generated · live 3-generation ox-alpha tournament (54 LLM plans incl. D1 agentic vector) launched for final evidence.
+- **LIVE 3-GEN TOURNAMENT RESULT** (`tests/tournament_live3.py`, 48/54 ox-alpha plans landed): escalation **71.5% → 40.5% → 36.9%** held-out detection across generations at ~2% FP — blue retrains on everything seen each generation and the SHAP-fed red squads *still* stay ahead (gen-2 A1 champion: 0.0% detection, total evasion; gen-3 champions 5-19%). The audit's "flat line" liability is now a descending adaptive-evasion curve — the thesis artifact, live, with the agentic vector in the fight.
 - **Still open (user actions)**: P0.2 rotate pasted keys; P0.4 audit-visibility decision; P4 docx + demo video + submission checklist.
 
 ---
