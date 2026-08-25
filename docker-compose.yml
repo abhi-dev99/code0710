@@ -1,0 +1,15 @@
+services:
+  livefire:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # pass your OpenRouter key at runtime: LLM_API_KEY=sk-or-... docker compose up
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - LLM_MODEL_STRATEGY=${LLM_MODEL_STRATEGY:-}
+      - LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-max}
+    volumes:
+      - ledger-data:/app/data
+volumes:
+  ledger-data:
