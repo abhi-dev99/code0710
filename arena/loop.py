@@ -218,6 +218,7 @@ def run_round(
     profile_key: str = "card_intl",
     vector_ids: list[str] | None = None,
     n_benign: int = 3000,
+    n_calib_benign: int = 5000,
     seed: int = 710,
     use_llm: bool = True,
     memory: StrategyMemory | None = None,
@@ -233,9 +234,9 @@ def run_round(
     amounts, hour_weights = real_anchor()
     benign_train = generate_benign(int(n_benign * 0.5), profile=p, seed=seed,
                                    amount_pool=amounts, hour_weights=hour_weights)
-    benign_calib = generate_benign(int(n_benign * 0.25), profile=p, seed=seed + 555,
+    benign_calib = generate_benign(n_calib_benign, profile=p, seed=seed + 555,
                                    amount_pool=amounts, hour_weights=hour_weights)
-    benign_test = generate_benign(n_benign - int(n_benign * 0.5) - int(n_benign * 0.25),
+    benign_test = generate_benign(n_benign - int(n_benign * 0.5),
                                   profile=p, seed=seed + 999,
                                   amount_pool=amounts, hour_weights=hour_weights)
 
@@ -504,6 +505,7 @@ def run_tournament(
     profile_key: str = "card_intl",
     vector_ids: list[str] | None = None,
     n_benign: int = 2400,
+    n_calib_benign: int = 5000,
     seed: int = 710,
     use_llm: bool = False,
     squad_size: int = 10,
@@ -526,9 +528,9 @@ def run_tournament(
     amounts, hour_weights = real_anchor()
     benign_train = generate_benign(int(n_benign * 0.5), profile=p, seed=seed,
                                    amount_pool=amounts, hour_weights=hour_weights)
-    benign_calib = generate_benign(int(n_benign * 0.25), profile=p, seed=seed + 555,
+    benign_calib = generate_benign(n_calib_benign, profile=p, seed=seed + 555,
                                    amount_pool=amounts, hour_weights=hour_weights)
-    benign_test = generate_benign(n_benign - int(n_benign * 0.5) - int(n_benign * 0.25),
+    benign_test = generate_benign(n_benign - int(n_benign * 0.5),
                                   profile=p, seed=seed + 999,
                                   amount_pool=amounts, hour_weights=hour_weights)
     memory = memory or StrategyMemory()
