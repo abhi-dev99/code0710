@@ -261,7 +261,7 @@ def run_round(
     y_test = np.array([0] * n_bb + [1] * n_ea)
 
     ensemble = BlueEnsemble(FEATURE_NAMES).fit(X_train, y_train)
-    ensemble.calibrate(X_calib, target_fp=0.02)
+    ensemble.calibrate(X_calib, target_fp=0.005)
     overall = ensemble.confusion(X_test, y_test)
 
     # held-out-vector-only detection (the headline number)
@@ -571,7 +571,7 @@ def run_tournament(
         y_test = np.array([0] * n_bb + [1] * n_ea)
 
         ensemble = BlueEnsemble(FEATURE_NAMES).fit(X_train, y_train)
-        ensemble.calibrate(X_calib, target_fp=0.02)
+        ensemble.calibrate(X_calib, target_fp=0.005)
         overall = ensemble.confusion(X_test, y_test)
         fp_rate = ensemble.confusion(X_test[:n_bb], np.zeros(n_bb))["fp_rate_on_benign"]
 

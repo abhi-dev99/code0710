@@ -20,11 +20,18 @@ from typing import Any
 
 import joblib
 import numpy as np
+from sklearn.ensemble import IsolationForest
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
-BLUE_VERSION = "blue_v1"
+BLUE_VERSION = "blue_v2"
+
+# Fusion weights (P2.3: four tiers; IF at low weight as the zero-day catcher).
+# calibrate() MUST use the identical weights — the v1 bug was calibrating the
+# threshold against 0.55/0.25 while predict() fused 0.55/0.25/0.20.
+W_XGB, W_LR, W_RULES, W_IF = 0.50, 0.20, 0.20, 0.10
 
 # Rules tier: deterministic, auditable, per-rail-tunable
 RULE_VELOCITY_1H = 5        # >5 txns per user in 1h
@@ -49,6 +56,32 @@ class RulesDetector:
             | (X[:, self.idx["distance_km"]] > RULE_DISTANCE)
         )
         return hits.astype(int)
+
+
+class IFDetector:
+    """Unsupervised novelty tier (P2.3): Isolation Forest fitted on BENIGN
+    traffic only. Catches families the supervised tiers have no training
+    signal for — the zero-day story. Score normalized to [0,1] against the
+    benign anomaly distribution."""
+
+    def __init__(self, seed: int = 710):
+        self.model = IsolationForest(n_estimators=200, contamination=0.02,
+                                     random_state=seed)
+        self._mid = 0.0
+        self._scale = 1.0
+        self.fitted = False
+
+    def fit(self, X: np.ndarray) -> "IFDetector":
+        self.model.fit(X)
+        s = -self.model.score_samples(X)          # higher = more anomalous
+        self._mid = float(np.quantile(s, 0.50))
+        self._scale = max(float(np.quantile(s, 0.999)) - self._mid, 1e-9)
+        self.fitted = True
+        return self
+
+    def score(self, X: np.ndarray) -> np.ndarray:
+        s = -self.model.score_samples(X)
+        return np.clip((s - self._mid) / self._scale, 0.0, 1.0)
 
 
 class XGBDetector:
@@ -90,21 +123,35 @@ class BlueEnsemble:
         self.xgb = XGBDetector(seed)
         self.lr = LRDetector(seed)
         self.rules = RulesDetector(feature_names)
+        self.iforest = IFDetector(seed)
         self.threshold = 0.5
         self.fitted = False
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "BlueEnsemble":
         self.xgb.fit(X, y)
         self.lr.fit(X, y)
+        benign = X[y == 0]
+        if len(benign) >= 50:
+            self.iforest.fit(benign)   # unsupervised tier learns benign only
         self.fitted = True
         return self
 
-    def calibrate(self, X_benign: np.ndarray, target_fp: float = 0.02) -> float:
-        """Set threshold on a HELD-OUT benign slice (never trained on) so the
-        FP rate on benign traffic hits the target. Returns the threshold."""
-        s = 0.55 * self.xgb.score(X_benign) + 0.25 * self.lr.score(X_benign)
-        self.threshold = float(max(0.5, np.quantile(s, 1.0 - target_fp)))
+    def calibrate(self, X_benign: np.ndarray, target_fp: float = 0.005) -> float:
+        """Set threshold on a HELD-OUT benign slice so the FP rate hits the
+        target. Uses the IDENTICAL fusion as predict() (v1 calibrated against
+        the wrong weights) and a near-zero floor — the old max(0.5,…) floor
+        made tight FP regimes unreachable by construction (P2.1).
+        Default operating point 0.5% FP (was 2%); the strict literature
+        regime recall@FPR≤0.001 is reported separately by confusion()."""
+        s = self._fuse(X_benign)
+        self.threshold = float(max(0.05, np.quantile(s, 1.0 - target_fp)))
         return self.threshold
+
+    def _fuse(self, X: np.ndarray) -> np.ndarray:
+        s = W_XGB * self.xgb.score(X) + W_LR * self.lr.score(X) + W_RULES * self.rules.predict(X)
+        if self.iforest.fitted:
+            s = s + W_IF * self.iforest.score(X)
+        return s
 
     def save(self, path: str | Path) -> Path:
         """Persist the fitted ensemble (joblib) so /api/detect survives restarts."""
@@ -127,7 +174,8 @@ class BlueEnsemble:
         s_xgb = self.xgb.score(X)
         s_lr = self.lr.score(X)
         s_rules = self.rules.predict(X).astype(float)
-        fused = 0.55 * s_xgb + 0.25 * s_lr + 0.20 * s_rules
+        s_if = self.iforest.score(X) if self.iforest.fitted else np.zeros(len(X))
+        fused = W_XGB * s_xgb + W_LR * s_lr + W_RULES * s_rules + W_IF * s_if
         flagged = fused >= self.threshold
         # disagreement: ML confident-fraud but rules silent, or vice versa
         disagree = ((s_xgb >= 0.7) & (s_rules == 0)) | ((s_xgb < 0.3) & (s_rules == 1))
@@ -137,6 +185,7 @@ class BlueEnsemble:
             "score_xgb": s_xgb,
             "score_lr": s_lr,
             "score_rules": s_rules,
+            "score_iforest": s_if,
             "novelty_flag": disagree & ~flagged,   # suspicious-but-under-threshold
             "novelty_count": int(disagree.sum()),
         }
@@ -144,7 +193,8 @@ class BlueEnsemble:
     def confusion(self, X: np.ndarray, y: np.ndarray, threshold: float | None = None) -> dict[str, float]:
         res = self.predict(X)
         thr = self.threshold if threshold is None else threshold
-        pred = (res["fused_score"] >= thr).astype(int)
+        fused = res["fused_score"]
+        pred = (fused >= thr).astype(int)
         tp = int(((pred == 1) & (y == 1)).sum())
         fp = int(((pred == 1) & (y == 0)).sum())
         fn = int(((pred == 0) & (y == 1)).sum())
@@ -158,4 +208,18 @@ class BlueEnsemble:
             "f1": round(f1, 4),
             "fp_rate_on_benign": round(fp / max(tn + fp, 1), 6),
             "detection_rate": round(rec, 4),
+            "pr_auc": round(float(average_precision_score(y, fused)), 4) if len(set(y)) > 1 else 0.0,
+            "recall_at_fpr_0.001": self._recall_at_fpr(X[y == 0], X[y == 1], 0.001),
         }
+
+    def _recall_at_fpr(self, X_ben: np.ndarray, X_atk: np.ndarray,
+                       fpr_target: float = 0.001) -> float:
+        """Literature-protocol metric: best detection achievable when the
+        benign FP budget is fpr_target (P2.1)."""
+        if len(X_ben) == 0 or len(X_atk) == 0:
+            return 0.0
+        s_ben = self._fuse(X_ben)
+        s_atk = self._fuse(X_atk)
+        k = max(1, int(np.ceil(fpr_target * len(s_ben))))
+        thr = float(np.sort(s_ben)[-k])          # allow top-k benign through
+        return round(float((s_atk >= thr).mean()), 4)

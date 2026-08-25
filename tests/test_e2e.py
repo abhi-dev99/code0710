@@ -91,14 +91,16 @@ def t_arena_round():
     from loop import run_round
     with tempfile.TemporaryDirectory() as td:
         m = StrategyMemory(Path(td) / "t.db")
-        s = run_round(profile_key="card_intl", vector_ids=["A1", "B1", "C1", "D1"],
-                      n_benign=1500, use_llm=False, memory=m)
-        assert 0 <= s["held_out_detection_rate"] <= 1
-        assert s["benign_fp_rate"] <= 0.05, f"FP too high: {s['benign_fp_rate']}"
-        assert s["overall"]["f1"] >= 0.5, f"F1 too low: {s['overall']['f1']}"
-        assert s["shap_why"]
-        assert len(m.ledger()) == 4 and len(m.round_history()) == 1
-        m.close()
+        try:
+            s = run_round(profile_key="card_intl", vector_ids=["A1", "B1", "C1", "D1"],
+                          n_benign=1500, use_llm=False, memory=m)
+            assert 0 <= s["held_out_detection_rate"] <= 1
+            assert s["benign_fp_rate"] <= 0.05, f"FP too high: {s['benign_fp_rate']}"
+            assert s["overall"]["f1"] >= 0.5, f"F1 too low: {s['overall']['f1']}"
+            assert s["shap_why"]
+            assert len(m.ledger()) == 4 and len(m.round_history()) == 1
+        finally:
+            m.close()  # always release the sqlite handle before tempdir cleanup
 
 
 # ---------------------------------------------------------------- 5. ledger
