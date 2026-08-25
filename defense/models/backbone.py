@@ -201,6 +201,7 @@ class BlueEnsemble:
         fp = int(((pred == 1) & (y == 0)).sum())
         fn = int(((pred == 0) & (y == 1)).sum())
         tn = int(((pred == 0) & (y == 0)).sum())
+        rec_at_fpr, realized_at_fpr = self._recall_at_fpr(X[y == 0], X[y == 1], 0.001)
         prec = tp / (tp + fp) if tp + fp else 0.0
         rec = tp / (tp + fn) if tp + fn else 0.0
         f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
@@ -211,17 +212,28 @@ class BlueEnsemble:
             "fp_rate_on_benign": round(fp / max(tn + fp, 1), 6),
             "detection_rate": round(rec, 4),
             "pr_auc": round(float(average_precision_score(y, fused)), 4) if len(set(y)) > 1 else 0.0,
-            "recall_at_fpr_0.001": self._recall_at_fpr(X[y == 0], X[y == 1], 0.001),
+            "recall_at_fpr_0.001": rec_at_fpr,
+            "recall_at_fpr_0.001_realized_fpr": realized_at_fpr,   # audit 11: report realized, not nominal
         }
 
     def _recall_at_fpr(self, X_ben: np.ndarray, X_atk: np.ndarray,
-                       fpr_target: float = 0.001) -> float:
+                       fpr_target: float = 0.001) -> tuple[float, float]:
         """Literature-protocol metric: best detection achievable when the
-        benign FP budget is fpr_target (P2.1)."""
+        benign FP budget is fpr_target — REALIZED, not nominal (audit 11:
+        ceil() let k=ceil(0.001*n) through, i.e. a 0.00133 realized budget
+        against a 0.001 nominal one). floor() now guarantees
+        realized_fpr <= fpr_target; the realized rate is returned alongside
+        so callers report both."""
         if len(X_ben) == 0 or len(X_atk) == 0:
-            return 0.0
+            return 0.0, 0.0
         s_ben = self._fuse(X_ben)
         s_atk = self._fuse(X_atk)
-        k = max(1, int(np.ceil(fpr_target * len(s_ben))))
-        thr = float(np.sort(s_ben)[-k])          # allow top-k benign through
-        return round(float((s_atk >= thr).mean()), 4)
+        k = int(np.floor(fpr_target * len(s_ben)))   # benign rows allowed through
+        s_sorted = np.sort(s_ben)
+        if k <= 0:
+            thr = float(np.nextafter(s_sorted[-1], np.inf))   # strict: zero benign may fire
+        else:
+            thr = float(s_sorted[-k])
+        recall = round(float((s_atk >= thr).mean()), 4)
+        realized = round(float((s_ben >= thr).mean()), 6)
+        return recall, realized
