@@ -240,6 +240,8 @@ def run_round(
                 print(f"[arena] LLM plan failed for {vid} ({type(e).__name__}) — template fallback")
         if plan is None:
             plan = template_plan(vid, profile_key)
+        if VECTORS[vid].get("category") == "agentic_payment_attack":
+            plan.setdefault("memo_injection", True)   # P2.4: Category D signal
         out = weave_attack_plan(plan, profile=p, seed=seed + 100 + i)
         if not out["ok"]:
             print(f"[arena] plan unweaveable for {vid}: {out['errors']} — template fallback")
@@ -534,6 +536,8 @@ def run_tournament(
                     plan = _squad_plan_template(vid, profile_key, j, seed + gen, shap_ctx)
                 else:
                     n_llm += 1
+                if VECTORS[vid].get("category") == "agentic_payment_attack":
+                    plan.setdefault("memo_injection", True)   # P2.4: Category D
                 out = weave_attack_plan(plan, profile=p, seed=seed + 1000 * gen + 100 * vi + j)
                 if not out["ok"]:
                     out = weave_attack_plan(_squad_plan_template(vid, profile_key, j, seed + gen, shap_ctx),

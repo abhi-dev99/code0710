@@ -27,7 +27,25 @@ FEATURE_NAMES = [
     "user_cnt_1h", "user_sum_1h", "user_merchants_1h",
     "device_cnt_1h", "device_users",
     "merchant_users", "user_merchant_repeats",
+    "memo_injection_score",
 ]
+
+# heuristic prompt-injection markers for the memo/invoice text field (P2.4:
+# minimum-viable Category D — the semantic tier's deterministic stand-in)
+_INJECTION_PATTERNS = [
+    "ignore previous", "ignore all previous", "ignore the above",
+    "system:", "assistant:", "agent context", "<|", "override",
+    "beneficiary", "approve invoice", "release payment", "wire to",
+    "auto-approve", "supersedes prior instructions", "without user confirmation",
+]
+
+
+def _memo_score(text: Any) -> float:
+    t = str(text or "").lower()
+    if not t:
+        return 0.0
+    hits = sum(1 for pat in _INJECTION_PATTERNS if pat in t)
+    return min(hits, 3.0) / 3.0
 
 
 def _epoch_h(ts: datetime) -> float:
@@ -120,6 +138,12 @@ def build_features(txns: list[dict[str, Any]]) -> pd.DataFrame:
 
     # amount ratio (computed in the user loop above)
     out["amt_vs_user_median"] = amt_ratio_vals[: len(out)]
+
+    # memo/invoice text: heuristic prompt-injection score (Category D signal)
+    if "memo_text" in df.columns:
+        out["memo_injection_score"] = df["memo_text"].map(_memo_score)
+    else:
+        out["memo_injection_score"] = 0.0
 
     out = out[FEATURE_NAMES].astype(float)
     # return in the ORIGINAL stream order (we computed in time order so the
