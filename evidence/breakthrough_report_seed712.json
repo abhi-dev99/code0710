@@ -1,0 +1,80 @@
+{
+  "seed": 712,
+  "rail": "card_intl",
+  "baseline_template_det": 0.84,
+  "grid_size": 48,
+  "breakthrough": {
+    "det": 0.0,
+    "grid": {
+      "amount": 3.0,
+      "count": 30,
+      "window": 48,
+      "users": 40
+    },
+    "plan": {
+      "vector": "low_signature_dispersion",
+      "channel": "card_not_present",
+      "merchant_categories": [
+        "Grocery",
+        "Restaurant",
+        "Fuel Station"
+      ],
+      "structuring": [
+        {
+          "amount": 3.0,
+          "count": 30
+        }
+      ],
+      "inter_arrival_s": {
+        "distribution": "uniform",
+        "min": 1800,
+        "max": 14000
+      },
+      "entity_cardinality": {
+        "users": 40,
+        "devices": 40,
+        "merchants": 25
+      },
+      "window_h": 48,
+      "amount_jitter_pct": 0.3
+    },
+    "delta_vs_template": {
+      "delta": 0.84,
+      "ci95": [
+        0.74,
+        0.94
+      ]
+    }
+  },
+  "forensics": {
+    "xgb_confident_fraud_rate": 0.0,
+    "iforest_high_anomaly_rate": 0.0,
+    "iforest_anomaly_rate_on_xgb_misses": 0.0,
+    "fused_threshold": 0.5202
+  },
+  "recovery": {
+    "fresh_weave_seed": 5955,
+    "label": "SAME-FAMILY recovery: same plan grid, different weave seed \u2014 not a never-seen family (audit 12 relabel)",
+    "det_after_retrain": 0.6667,
+    "fp_after_retrain": 0.005,
+    "delta_vs_breakthrough": {
+      "delta": 0.6667,
+      "ci95": [
+        0.5,
+        0.8333
+      ]
+    }
+  },
+  "chart": {
+    "labels": [
+      "template (baseline blue)",
+      "breakthrough (baseline blue)",
+      "breakthrough (retrained blue)"
+    ],
+    "values": [
+      0.84,
+      0.0,
+      0.6667
+    ]
+  }
+}

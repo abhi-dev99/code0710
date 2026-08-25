@@ -99,7 +99,8 @@ def build_features(txns: list[dict[str, Any]]) -> pd.DataFrame:
         med = user_median.setdefault(row.user_id, [])
         hist = med[:-1]
         if hist:
-            amt_ratio_vals.append(float(row.amount) / max(float(np.median(hist)), 1e-6))
+            # clipped: unbounded ratios (2.5e9 seen in audit 11/S3) saturate LR
+            amt_ratio_vals.append(min(float(row.amount) / max(float(np.median(hist)), 1e-6), 50.0))
         else:
             amt_ratio_vals.append(1.0)
         med.append(float(row.amount))

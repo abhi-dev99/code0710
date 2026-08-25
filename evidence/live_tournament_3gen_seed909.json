@@ -1,0 +1,264 @@
+{
+  "mode": "tournament",
+  "rail_profile": "card_intl",
+  "blue_version": "blue_v2",
+  "squad_size": 6,
+  "generations": [
+    {
+      "gen": 1,
+      "n_candidates": 18,
+      "n_llm_plans": 16,
+      "n_heldout": 6,
+      "held_out_detection_rate": 0.7151,
+      "benign_fp_rate": 0.023333,
+      "overall": {
+        "tp": 1483,
+        "fp": 7,
+        "fn": 306,
+        "tn": 293,
+        "precision": 0.9953,
+        "recall": 0.829,
+        "f1": 0.9045,
+        "fp_rate_on_benign": 0.023333,
+        "detection_rate": 0.829,
+        "pr_auc": 0.9948,
+        "recall_at_fpr_0.001": 0.6825
+      },
+      "champions": [
+        {
+          "vector": "synthetic_identity_farming",
+          "vector_id": "A1",
+          "squad_idx": 4,
+          "llm_generated": true,
+          "detection_rate": 0.2195
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "vector_id": "B1",
+          "squad_idx": 4,
+          "llm_generated": true,
+          "detection_rate": 0.4225
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "vector_id": "D1",
+          "squad_idx": 4,
+          "llm_generated": true,
+          "detection_rate": 0.8158
+        }
+      ],
+      "shap_why": "hour_cos (shap=2.01); amount (shap=1.54); distance_km (shap=1.23)",
+      "candidates": [
+        {
+          "vector": "synthetic_identity_farming",
+          "squad_idx": 4,
+          "llm": true,
+          "detection_rate": 0.2195
+        },
+        {
+          "vector": "synthetic_identity_farming",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 0.859
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "squad_idx": 4,
+          "llm": true,
+          "detection_rate": 0.4225
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 1.0
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "squad_idx": 4,
+          "llm": true,
+          "detection_rate": 0.8158
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 0.9739
+        }
+      ]
+    },
+    {
+      "gen": 2,
+      "n_candidates": 18,
+      "n_llm_plans": 17,
+      "n_heldout": 6,
+      "held_out_detection_rate": 0.405,
+      "benign_fp_rate": 0.016667,
+      "overall": {
+        "tp": 1216,
+        "fp": 5,
+        "fn": 736,
+        "tn": 295,
+        "precision": 0.9959,
+        "recall": 0.623,
+        "f1": 0.7665,
+        "fp_rate_on_benign": 0.016667,
+        "detection_rate": 0.623,
+        "pr_auc": 0.991,
+        "recall_at_fpr_0.001": 0.5102
+      },
+      "champions": [
+        {
+          "vector": "synthetic_identity_farming",
+          "vector_id": "A1",
+          "squad_idx": 4,
+          "llm_generated": true,
+          "detection_rate": 0.0
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "vector_id": "B1",
+          "squad_idx": 4,
+          "llm_generated": true,
+          "detection_rate": 0.1707
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "vector_id": "D1",
+          "squad_idx": 4,
+          "llm_generated": false,
+          "detection_rate": 0.4865
+        }
+      ],
+      "shap_why": "merchant_users (shap=2.47); hour_cos (shap=1.79); hour_sin (shap=0.89)",
+      "candidates": [
+        {
+          "vector": "synthetic_identity_farming",
+          "squad_idx": 4,
+          "llm": true,
+          "detection_rate": 0.0
+        },
+        {
+          "vector": "synthetic_identity_farming",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 0.6875
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "squad_idx": 4,
+          "llm": true,
+          "detection_rate": 0.1707
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 0.4079
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "squad_idx": 4,
+          "llm": false,
+          "detection_rate": 0.4865
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 0.6777
+        }
+      ]
+    },
+    {
+      "gen": 3,
+      "n_candidates": 18,
+      "n_llm_plans": 15,
+      "n_heldout": 6,
+      "held_out_detection_rate": 0.3686,
+      "benign_fp_rate": 0.02,
+      "overall": {
+        "tp": 553,
+        "fp": 6,
+        "fn": 371,
+        "tn": 294,
+        "precision": 0.9893,
+        "recall": 0.5985,
+        "f1": 0.7458,
+        "fp_rate_on_benign": 0.02,
+        "detection_rate": 0.5985,
+        "pr_auc": 0.9852,
+        "recall_at_fpr_0.001": 0.5314
+      },
+      "champions": [
+        {
+          "vector": "synthetic_identity_farming",
+          "vector_id": "A1",
+          "squad_idx": 4,
+          "llm_generated": false,
+          "detection_rate": 0.05
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "vector_id": "B1",
+          "squad_idx": 4,
+          "llm_generated": false,
+          "detection_rate": 0.0833
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "vector_id": "D1",
+          "squad_idx": 5,
+          "llm_generated": true,
+          "detection_rate": 0.1923
+        }
+      ],
+      "shap_why": "merchant_users (shap=1.56); hour_cos (shap=1.38); user_cnt_1h (shap=1.30)",
+      "candidates": [
+        {
+          "vector": "synthetic_identity_farming",
+          "squad_idx": 4,
+          "llm": false,
+          "detection_rate": 0.05
+        },
+        {
+          "vector": "synthetic_identity_farming",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 0.8215
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "squad_idx": 4,
+          "llm": false,
+          "detection_rate": 0.0833
+        },
+        {
+          "vector": "voice_clone_approval_fraud",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 0.5333
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "squad_idx": 4,
+          "llm": true,
+          "detection_rate": 0.5312
+        },
+        {
+          "vector": "prompt_injected_invoices",
+          "squad_idx": 5,
+          "llm": true,
+          "detection_rate": 0.1923
+        }
+      ]
+    }
+  ],
+  "escalation": [
+    0.7151,
+    0.405,
+    0.3686
+  ],
+  "red_advantage": 0.6314,
+  "n_benign": 1200
+}

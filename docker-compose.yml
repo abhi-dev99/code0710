@@ -9,6 +9,9 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL:-}
       - LLM_MODEL_STRATEGY=${LLM_MODEL_STRATEGY:-}
       - LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-max}
+      # ledger lives on the mounted volume (audit 11/K4: was /app/arena_ledger.db,
+      # unreachable from the /app/data mount)
+      - LIVEFIRE_DB=/app/data/arena_ledger.db
     volumes:
       - ledger-data:/app/data
 volumes:

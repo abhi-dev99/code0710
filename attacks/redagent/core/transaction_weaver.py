@@ -24,6 +24,7 @@ All transactions carry provenance: campaign_id, attack vector, is_attack=True.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from datetime import datetime, timedelta
@@ -140,7 +141,8 @@ def weave_attack_plan(
         return {"ok": False, "errors": errs, "txns": [], "dropped": 0, "stats": {}}
 
     rng = np.random.default_rng(seed)
-    campaign_id = campaign_id or f"cmp_{p.key}_{seed}_{abs(hash(json.dumps(plan, sort_keys=True, default=str))) % 100000:05d}"
+    plan_hash = hashlib.sha1(json.dumps(plan, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:8]
+    campaign_id = campaign_id or f"cmp_{p.key}_{seed}_{plan_hash}"
     tz = ZoneInfo(p.timezone_name)
     ch = p.channels[str(plan["channel"])]
     now = datetime.now(tz).replace(microsecond=0)

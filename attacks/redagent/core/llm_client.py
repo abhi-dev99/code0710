@@ -152,7 +152,14 @@ class LLMClient:
                         json=body,
                     )
                     r.raise_for_status()
-                    data = r.json()
+                    try:
+                        data = r.json()
+                    except ValueError as e:  # HTML-200 / malformed body (audit 11/S6)
+                        last_err = e
+                        if attempt < self._max_retries - 1:
+                            await asyncio.sleep(delay)
+                            delay = min(delay * 2, 30)
+                        continue
                     usage = data.get("usage") or {}
                     if usage:
                         print(f"[llm] {model} tokens in={usage.get('prompt_tokens')} "

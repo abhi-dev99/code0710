@@ -90,7 +90,9 @@ class XGBDetector:
             n_estimators=300, max_depth=5, learning_rate=0.08,
             subsample=0.9, colsample_bytree=0.9,
             scale_pos_weight=10.0,          # imbalance-robust
-            eval_metric="aucpr", random_state=seed, n_jobs=4,
+            eval_metric="aucpr", random_state=seed,
+            n_jobs=1,                       # K1: multithreaded hist is nondeterministic
+            tree_method="hist",             # deterministic histogram builder
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBDetector":
@@ -175,7 +177,7 @@ class BlueEnsemble:
         s_lr = self.lr.score(X)
         s_rules = self.rules.predict(X).astype(float)
         s_if = self.iforest.score(X) if self.iforest.fitted else np.zeros(len(X))
-        fused = W_XGB * s_xgb + W_LR * s_lr + W_RULES * s_rules + W_IF * s_if
+        fused = self._fuse(X)   # single fusion path (audit 12: no inline re-implementation)
         flagged = fused >= self.threshold
         # disagreement: ML confident-fraud but rules silent, or vice versa
         disagree = ((s_xgb >= 0.7) & (s_rules == 0)) | ((s_xgb < 0.3) & (s_rules == 1))

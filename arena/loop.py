@@ -177,12 +177,22 @@ def llm_plan(
 # ------------------------------------------------------------- real anchors
 
 def real_anchor() -> tuple[np.ndarray, list[float]]:
-    """Bootstrap pools from the REAL ULB corpus (honesty protocol)."""
-    df = pd.read_parquet(_ROOT / "data" / "splits" / "ulb_train.parquet")
-    amounts = df["Amount"].to_numpy()
-    hours = ((df["Time"] / 3600.0) % 24).astype(int)
-    hw = [float((hours == h).mean()) for h in range(24)]
-    return amounts, hw
+    """Bootstrap pools from the REAL corpus (ULB) — the honesty protocol.
+    K4: on a clean clone without committed splits this USED to raise
+    FileNotFoundError and 500 every round. Now falls back to broad uniform
+    pools with a loud warning — the arena runs, but every artifact produced
+    without splits must be labeled 'not real-corpus anchored'."""
+    splits = _ROOT / "data" / "splits" / "ulb_train.parquet"
+    if splits.exists():
+        df = pd.read_parquet(splits)
+        amounts = df["Amount"].to_numpy()
+        hours = ((df["Time"] / 3600.0) % 24).astype(int)
+        hw = [float((hours == h).mean()) for h in range(24)]
+        return amounts, hw
+    print("[arena] WARNING: data/splits/ulb_train.parquet missing — benign "
+          "traffic is NOT real-corpus anchored (uniform fallback). Run "
+          "data/download_datasets.py + data/build_splits.py for honest anchors.")
+    return np.linspace(1.0, 500.0, 200), [1 / 24] * 24
 
 
 # ----------------------------------------------------------------- SHAP why
@@ -247,6 +257,16 @@ def run_round(
             print(f"[arena] plan unweaveable for {vid}: {out['errors']} — template fallback")
             out = weave_attack_plan(template_plan(vid, profile_key), profile=p, seed=seed + 100 + i)
         campaigns.append({"vector_id": vid, "plan": plan, "used_llm": used_llm, **out})
+
+    # K5 guard: a single-vector request leaves train_atk empty -> single-class
+    # LR crash. Inject a canonical template campaign (different vector) as
+    # in-sample training filler so the round always has two classes.
+    if len(campaigns) < 2:
+        filler_vid = next(v for v in VECTORS if v not in vector_ids)
+        fplan = template_plan(filler_vid, profile_key)
+        fout = weave_attack_plan(fplan, profile=p, seed=seed + 77)
+        campaigns.insert(0, {"vector_id": filler_vid, "plan": fplan,
+                             "used_llm": False, **fout})
 
     # ---- cross-vector split: last vector held out (never-seen family)
     holdout = campaigns[-1]
@@ -336,6 +356,7 @@ def run_multi_rail(vector_ids: list[str] | None = None, n_benign: int = 1500,
         try:
             out[key] = run_round(profile_key=key, vector_ids=vector_ids,
                                  n_benign=n_benign, seed=seed, use_llm=use_llm)
+            out[key].pop("_ensemble", None)   # K5: never serialize fitted ensembles
         except Exception as e:  # keep other rails alive if one profile fails
             out[key] = {"error": f"{type(e).__name__}: {e}"}
     return out
@@ -463,7 +484,7 @@ async def _llm_squad_async(
             )
             try:
                 raw = await client.complete("strategy", system=ARENA_SYSTEM, user=user,
-                                            json_mode=True, temperature=temp)
+                                            json_mode=True, temperature=min(temp, 2.0))
                 plan = json.loads(raw, strict=False)
                 plan["vector"] = v["name"]
                 plan.setdefault("channel", ch.name)

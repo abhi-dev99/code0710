@@ -294,6 +294,7 @@ def detect(req: DetectRequest) -> dict:
     """Score transactions with the ensemble from the last round (auto-reloaded
     from the persisted artifact after a server restart).
     Cold-start caveat: velocity/graph windows only see this batch."""
+    import math
     import time
 
     ens = _state.get("ensemble")
@@ -309,6 +310,13 @@ def detect(req: DetectRequest) -> dict:
         t.setdefault("device_id", "api_dev")
         t.setdefault("merchant_id", t.get("merchant_id") or "api_merchant")
         t.setdefault("location_distance_km", 0.0)
+        amt = t.get("amount")
+        try:
+            if amt is None or not math.isfinite(float(amt)):
+                raise ValueError
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"transaction {t.get('txn_id', i)}: "
+                                     f"'amount' must be a finite number (got {amt!r})")
         txns.append(t)
     t0 = time.perf_counter()
     try:
@@ -316,7 +324,10 @@ def detect(req: DetectRequest) -> dict:
     except Exception as e:
         raise HTTPException(400, f"feature extraction failed: {type(e).__name__}: {e}") from e
     t1 = time.perf_counter()
-    res = ens.predict(X)
+    try:
+        res = ens.predict(X)
+    except Exception as e:
+        raise HTTPException(400, f"scoring failed: {type(e).__name__}: {e}") from e
     t2 = time.perf_counter()
     feat_ms, score_ms = round((t1 - t0) * 1000, 2), round((t2 - t1) * 1000, 2)
     with _state_lock:

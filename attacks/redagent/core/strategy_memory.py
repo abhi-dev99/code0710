@@ -14,13 +14,15 @@ Schema:
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_DEFAULT_DB = Path(__file__).resolve().parents[3] / "arena_ledger.db"
+_DEFAULT_DB = Path(os.environ.get("LIVEFIRE_DB",
+                                  Path(__file__).resolve().parents[3] / "arena_ledger.db"))
 
 
 class StrategyMemory:

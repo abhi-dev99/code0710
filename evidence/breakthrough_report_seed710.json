@@ -1,0 +1,79 @@
+{
+  "seed": 710,
+  "rail": "card_intl",
+  "baseline_template_det": 0.8085,
+  "grid_size": 48,
+  "breakthrough": {
+    "det": 0.0,
+    "grid": {
+      "amount": 3.0,
+      "count": 30,
+      "window": 48,
+      "users": 40
+    },
+    "plan": {
+      "vector": "low_signature_dispersion",
+      "channel": "card_not_present",
+      "merchant_categories": [
+        "Grocery",
+        "Restaurant",
+        "Fuel Station"
+      ],
+      "structuring": [
+        {
+          "amount": 3.0,
+          "count": 30
+        }
+      ],
+      "inter_arrival_s": {
+        "distribution": "uniform",
+        "min": 1800,
+        "max": 14000
+      },
+      "entity_cardinality": {
+        "users": 40,
+        "devices": 40,
+        "merchants": 25
+      },
+      "window_h": 48,
+      "amount_jitter_pct": 0.3
+    },
+    "delta_vs_template": {
+      "delta": 0.8085,
+      "ci95": [
+        0.7021,
+        0.9149
+      ]
+    }
+  },
+  "forensics": {
+    "xgb_confident_fraud_rate": 0.0,
+    "iforest_high_anomaly_rate": 0.0,
+    "iforest_anomaly_rate_on_xgb_misses": 0.0,
+    "fused_threshold": 0.5144
+  },
+  "recovery": {
+    "fresh_weave_seed": 5953,
+    "det_after_retrain": 0.8333,
+    "fp_after_retrain": 0.0083,
+    "delta_vs_breakthrough": {
+      "delta": 0.8333,
+      "ci95": [
+        0.7,
+        0.9667
+      ]
+    }
+  },
+  "chart": {
+    "labels": [
+      "template (baseline blue)",
+      "breakthrough (baseline blue)",
+      "breakthrough (retrained blue)"
+    ],
+    "values": [
+      0.8085,
+      0.0,
+      0.8333
+    ]
+  }
+}

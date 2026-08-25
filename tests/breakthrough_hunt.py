@@ -37,7 +37,7 @@ from redagent.core.strategy_memory import StrategyMemory  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 P = get_profile("card_intl")
-SEED = 710
+SEED = int(sys.argv[1]) if len(sys.argv) > 1 else 710
 
 
 def det_rate(ens, benign, txns):
@@ -153,6 +153,8 @@ def main() -> None:
     lo2, hi2 = bootstrap_ci(res_fresh["flagged"].astype(float), res_bt["flagged"].astype(float))
     report["recovery"] = {
         "fresh_weave_seed": best["seed"] + 4242,
+        "label": "SAME-FAMILY recovery: same plan grid, different weave seed — "
+                 "not a never-seen family (audit 12 relabel)",
         "det_after_retrain": round(rec_det, 4), "fp_after_retrain": round(rec_fp, 4),
         "delta_vs_breakthrough": {"delta": round(rec_det - best["det"], 4),
                                   "ci95": [round(lo2, 4), round(hi2, 4)]}}
@@ -164,7 +166,7 @@ def main() -> None:
                    "breakthrough (retrained blue)"],
         "values": [round(base_det, 4), round(best["det"], 4), round(rec_det, 4)],
     }
-    out_path = ROOT / "tests" / "_breakthrough_report.json"
+    out_path = ROOT / "tests" / f"_breakthrough_report_seed{SEED}.json"
     out_path.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
     print(f"\n[done] report -> {out_path}")
     print("THE CHART:", json.dumps(report["chart"]))

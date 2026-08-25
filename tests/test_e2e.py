@@ -95,7 +95,8 @@ def t_arena_round():
             s = run_round(profile_key="card_intl", vector_ids=["A1", "B1", "C1", "D1"],
                           n_benign=1500, use_llm=False, memory=m)
             assert 0 <= s["held_out_detection_rate"] <= 1
-            assert s["benign_fp_rate"] <= 0.05, f"FP too high: {s['benign_fp_rate']}"
+            assert s["benign_fp_rate"] <= 0.02, (  # matches the 0.5%-target regime + calib noise
+                f"FP too high: {s['benign_fp_rate']}")
             assert s["overall"]["f1"] >= 0.5, f"F1 too low: {s['overall']['f1']}"
             assert s["shap_why"]
             assert len(m.ledger()) == 4 and len(m.round_history()) == 1
