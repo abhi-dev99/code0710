@@ -29,6 +29,7 @@ defense/models/*.json
 defense/models/*.pkl
 /models/
 *.joblib
+!defense/models/artifacts/ulb_backbone.joblib
 *.onnx
 experiments/results/
 node_modules/
