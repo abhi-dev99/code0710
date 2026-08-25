@@ -4,6 +4,21 @@ Every decision, change, and event logged here. Newest first.
 
 ---
 
+## 2026-08-25 — Product-completeness pass: persistence, export, round history, detect playground
+
+Audit found real unbuilt surface (not cosmetics). All fixed and live-verified (tests/verify_product.py 6/6):
+
+- **Ensemble persistence** (was a deferred item — now built): `BlueEnsemble.save/load` (joblib). Every `/api/round` writes `defense/models/artifacts/arena_ensemble.joblib`; server startup auto-reloads it, so `/api/detect` works immediately after a restart (previously 409 cold-start). `GET /api/health` now reports `ensemble_ready` + artifact path.
+- **`/api/multi-rail` honors `use_llm`** — was hardcoded `False`, silently dropping the dashboard's ox-alpha checkbox.
+- **`GET /api/ledger/export`** — full Robustness Ledger as CSV download (evidence artifact for judges); button added to the dashboard.
+- **Round history panel** — `/api/rounds` existed but the UI never showed it; now a "blue-team evolution" table (F1/confusion/notes per round).
+- **Score-transactions playground** — `/api/detect` was curl-only; dashboard now has a JSON textarea + scored results table (flagged/fused/xgb/novelty), pre-filled with a benign+attack demo pair.
+- **Mojibake fixed** — the PowerShell editing quirk had mangled dashboard glyphs to U+FFFD ('?'); restored contextually via `tests/fix_ui_glyphs.py` (editor/Python writes only, no BOM).
+- New tests: `tests/verify_product.py` (live 6-check product verification), `tests/fix_ui_glyphs.py` (idempotent glyph/panel fixer). E2E suite still 6/6.
+- Ops note: the long-running uvicorn had NOT reloaded code (no `--reload`); killed PID 366736 and restarted — new surface confirmed live via `/openapi.json`.
+
+---
+
 ## 2026-08-25 — FINAL SPRINT: end-to-end product (branch `sprint/final-e2e`)
 
 Full closed-loop product implemented overnight. All commits on the sprint branch.

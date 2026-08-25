@@ -15,8 +15,10 @@ Evaluation protocol (honesty first):
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
@@ -103,6 +105,21 @@ class BlueEnsemble:
         s = 0.55 * self.xgb.score(X_benign) + 0.25 * self.lr.score(X_benign)
         self.threshold = float(max(0.5, np.quantile(s, 1.0 - target_fp)))
         return self.threshold
+
+    def save(self, path: str | Path) -> Path:
+        """Persist the fitted ensemble (joblib) so /api/detect survives restarts."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self, path)
+        return path
+
+    @classmethod
+    def load(cls, path: str | Path) -> "BlueEnsemble":
+        """Reload a fitted ensemble from disk; rejects corrupt/foreign artifacts."""
+        ens = joblib.load(path)
+        if not isinstance(ens, cls) or not getattr(ens, "fitted", False):
+            raise ValueError(f"{path} is not a fitted BlueEnsemble artifact")
+        return ens
 
     def predict(self, X: np.ndarray) -> dict[str, Any]:
         if not self.fitted:

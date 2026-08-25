@@ -60,6 +60,7 @@ td{padding:7px 8px;border-bottom:1px solid var(--line)}
     <label><input type="checkbox" id="usellm" style="width:auto"> Use ox-alpha planner (uncheck = deterministic templates)</label>
     <button id="runBtn" onclick="runRound()">▶ Run Round</button>
     <button class="ghost" onclick="runMultiRail()">🌐 Multi-Rail Ledger (all profiles)</button>
+    <a href="/api/ledger/export" style="display:block;text-align:center;margin-top:8px;padding:9px;border:1px solid var(--line);border-radius:8px;color:var(--txt);font-size:13px;text-decoration:none;background:var(--panel2)">⬇ Export Robustness Ledger (CSV)</a>
     <div id="err"></div>
   </div>
   <div class="panel">
@@ -76,6 +77,15 @@ td{padding:7px 8px;border-bottom:1px solid var(--line)}
   <div class="row2">
     <div class="panel"><h2>Robustness Ledger — campaigns</h2><div id="ledger" class="muted">empty</div></div>
     <div class="panel"><h2>Vector report card</h2><div id="vstats" class="muted">empty</div></div>
+  </div>
+  <div class="row2">
+    <div class="panel"><h2>Round history — blue-team evolution</h2><div id="rounds" class="muted">loading…</div></div>
+    <div class="panel">
+      <h2>Score transactions — live ensemble</h2>
+      <textarea id="detectInput" style="width:100%;height:150px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font:12px/1.4 Consolas,monospace"></textarea>
+      <button class="ghost" onclick="runDetect()">⚖ Score with current ensemble</button>
+      <div id="detectOut" class="muted" style="margin-top:8px">Uses the ensemble persisted from the last round (survives server restarts).</div>
+    </div>
   </div>
 </div>
 </div>
@@ -99,8 +109,9 @@ async function init(){
     const c=document.createElement("span");c.className="chip"+(i<4?" on":"");
     c.textContent=v.id+" "+v.name;c.onclick=()=>c.classList.toggle("on");vc.appendChild(c);
   });
-  document.getElementById("health").textContent = `online � ${h.vectors} vectors � ${h.ledger_campaigns} campaigns`;
-  loadReal(); loadLedger();
+  document.getElementById("health").textContent = `online ◆ ${h.vectors} vectors ◆ ${h.ledger_campaigns} campaigns`;
+  loadReal(); loadLedger(); loadRounds();
+  document.getElementById("detectInput").value = JSON.stringify(SAMPLE_TXNS,null,1);
 }
 async function loadReal(){
   try{const m=await fetch("/api/real-metrics").then(r=>r.json());
@@ -141,10 +152,34 @@ async function runMultiRail(){
       if(r.error){html+=`<tr><td>${rail}</td><td colspan=3 class=r>${r.error}</td></tr>`;continue;}
       html+=`<tr><td>${rail}</td><td class=g>${fmtPct(r.held_out_detection_rate)}</td><td>${fmtPct(r.benign_fp_rate)}</td><td>${r.overall.f1}</td></tr>`;
     }
-    document.getElementById("results").innerHTML=html+"</table><div class='muted' style='margin-top:8px'>Same attack vectors, every rail � attack survival per region is the Robustness Ledger multi-rail story.</div>";
+    document.getElementById("results").innerHTML=html+"</table><div class='muted' style='margin-top:8px'>Same attack vectors, every rail → attack survival per region is the Robustness Ledger multi-rail story.</div>";
     loadLedger();
   }catch(e){const d=document.getElementById("err");d.textContent="? "+e.message;d.style.display="block";}
   btn.disabled=false;
+}
+async function loadRounds(){
+  try{
+    const r=await fetch("/api/rounds").then(r=>r.json());
+    if(!r.rounds.length){document.getElementById("rounds").textContent="no rounds yet — run one";return;}
+    document.getElementById("rounds").innerHTML="<table><tr><th>When (UTC)</th><th>F1</th><th>TP/FP/FN/TN</th><th>Notes</th></tr>"+
+      r.rounds.slice(0,8).map(x=>`<tr><td>${(x.ts||"").replace("T"," ").slice(0,19)}</td><td class="b">${x.f1}</td><td>${x.tp}/${x.fp}/${x.fn}/${x.tn}</td><td class="muted">${String(x.notes||"").slice(0,90)}</td></tr>`).join("")+"</table>";
+  }catch(e){document.getElementById("rounds").textContent="unavailable";}
+}
+const SAMPLE_TXNS=[
+  {txn_id:"demo-benign",user_id:"u_alice",device_id:"dev_alice_1",merchant_id:"m_grocery",channel:"card_present",amount:42.5,timestamp:new Date(Date.now()-3600e3).toISOString(),location_distance_km:3},
+  {txn_id:"demo-attack",user_id:"u_burst",device_id:"dev_shared_x",merchant_id:"m_electronics",channel:"card_not_present",amount:4980,timestamp:new Date().toISOString(),location_distance_km:1450}
+];
+async function runDetect(){
+  const out=document.getElementById("detectOut");
+  let txns;
+  try{txns=JSON.parse(document.getElementById("detectInput").value);}
+  catch(e){out.innerHTML='<span class="r">invalid JSON</span>';return;}
+  try{
+    const r=await post("/api/detect",{transactions:txns});
+    out.innerHTML=`<div class="muted">blue=${r.blue_version} &middot; threshold=${r.threshold}</div>`+
+      `<table><tr><th>txn</th><th>flagged</th><th>fused</th><th>xgb</th><th>novelty</th></tr>`+
+      r.results.map(x=>`<tr><td>${x.txn_id}</td><td class="${x.flagged?'r':'g'}">${x.flagged}</td><td>${x.fused_score}</td><td>${x.score_xgb}</td><td>${x.novelty_flag?'<span class="a">yes</span>':'no'}</td></tr>`).join("")+"</table>";
+  }catch(e){out.innerHTML='<span class="r">'+e.message+"</span>";}
 }
 function renderRound(s){
   const o=s.overall;
@@ -155,11 +190,11 @@ function renderRound(s){
     <div class="metric"><div class="v b">${o.recall}</div><div class="k">recall</div></div>
     <div class="metric"><div class="v">${o.f1}</div><div class="k">F1</div></div>
   </div>`;
-  const rows=s.vectors.map(v=>`<tr><td>${v.id}</td><td>${v.vector}${v.held_out?' <span class="a">? held-out</span>':''}</td><td>${v.llm_generated?'?? ox-alpha':'? template'}</td><td>${v.n_txns}</td><td class="${v.detection_rate>0.5?'g':v.detection_rate>0.2?'a':'r'}">${fmtPct(v.detection_rate)}</td><td>${v.in_sample?'in-sample':'held-out'}</td></tr>`).join("");
+  const rows=s.vectors.map(v=>`<tr><td>${v.id}</td><td>${v.vector}${v.held_out?' <span class="a">★ held-out</span>':''}</td><td>${v.llm_generated?'🧠 ox-alpha':'⚙ template'}</td><td>${v.n_txns}</td><td class="${v.detection_rate>0.5?'g':v.detection_rate>0.2?'a':'r'}">${fmtPct(v.detection_rate)}</td><td>${v.in_sample?'in-sample':'held-out'}</td></tr>`).join("");
   document.getElementById("results").innerHTML = cards+
     `<table><tr><th>ID</th><th>Vector</th><th>Planner</th><th>Txns</th><th>Det rate</th><th>Eval</th></tr>${rows}</table>`+
     `<div class="why"><b>Why caught (SHAP):</b> ${s.shap_why}</div>`+
-    `<div class="muted" style="margin-top:6px">rail=${s.rail_profile} � blue=${s.blue_version} � held-out vector=${s.held_out_vector}</div>`;
+    `<div class="muted" style="margin-top:6px">rail=${s.rail_profile} · blue=${s.blue_version} · held-out vector=${s.held_out_vector}</div>`;
 }
 async function loadLedger(){
   try{

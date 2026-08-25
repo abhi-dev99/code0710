@@ -10,6 +10,7 @@ Endpoints:
   POST /api/round         -> run one arena round (red->weave->blue->explain->ledger)
   POST /api/multi-rail    -> same vectors across ALL rail profiles
   GET  /api/ledger        -> Robustness Ledger (campaigns)
+  GET  /api/ledger/export -> full ledger as CSV download
   GET  /api/rounds        -> round history
   POST /api/detect        -> score transactions with the current ensemble
 
@@ -17,13 +18,15 @@ Run: uvicorn app.api:app --reload --port 8000
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import sys
 import threading
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -41,6 +44,33 @@ app = FastAPI(title="LiveFire — Adversarial Co-Evolution Arena", version="1.0.
 memory = StrategyMemory()
 _state_lock = threading.Lock()
 _state: dict[str, Any] = {"last_round": None, "rounds_run": 0, "ensemble": None}
+
+# ---- ensemble persistence: the fitted blue team survives server restarts ----
+ENSEMBLE_ARTIFACT = _ROOT / "defense" / "models" / "artifacts" / "arena_ensemble.joblib"
+
+
+def _persist_ensemble(ens: Any) -> bool:
+    """Best-effort disk persistence; detection keeps working in-memory if it fails."""
+    try:
+        ens.save(ENSEMBLE_ARTIFACT)
+        return True
+    except Exception:
+        return False
+
+
+def _load_persisted_ensemble() -> bool:
+    if not ENSEMBLE_ARTIFACT.exists():
+        return False
+    try:
+        from models.backbone import BlueEnsemble
+
+        _state["ensemble"] = BlueEnsemble.load(ENSEMBLE_ARTIFACT)
+        return True
+    except Exception:
+        return False
+
+
+ENSEMBLE_RELOADED = _load_persisted_ensemble()
 
 
 class RoundRequest(BaseModel):
@@ -68,6 +98,9 @@ def health() -> dict:
         "vectors": len(VECTORS),
         "rail_profiles": sorted(PROFILES),
         "ledger_campaigns": len(memory.ledger(limit=10000)),
+        "ensemble_ready": _state["ensemble"] is not None,
+        "ensemble_artifact": str(ENSEMBLE_ARTIFACT.relative_to(_ROOT))
+        if ENSEMBLE_ARTIFACT.exists() else None,
     }
 
 
@@ -116,10 +149,14 @@ def post_round(req: RoundRequest) -> dict:
         )
     except Exception as e:  # surface failures to the UI, never 500-silently
         raise HTTPException(500, f"round failed: {type(e).__name__}: {e}") from e
+    ens = None
     with _state_lock:
-        _state["ensemble"] = summary.pop("_ensemble", None)
+        ens = summary.pop("_ensemble", None)
+        _state["ensemble"] = ens
         _state["last_round"] = summary
         _state["rounds_run"] += 1
+    if ens is not None:
+        _persist_ensemble(ens)
     return summary
 
 
@@ -127,7 +164,7 @@ def post_round(req: RoundRequest) -> dict:
 def post_multi_rail(req: RoundRequest) -> dict:
     try:
         out = run_multi_rail(vector_ids=req.vector_ids, n_benign=min(req.n_benign, 1500),
-                             seed=req.seed, use_llm=False)
+                             seed=req.seed, use_llm=req.use_llm)
     except Exception as e:
         raise HTTPException(500, f"multi-rail failed: {type(e).__name__}: {e}") from e
     with _state_lock:
@@ -143,6 +180,25 @@ def ledger(limit: int = 100) -> dict:
     return {"campaigns": rows, "vector_stats": memory.vector_stats()}
 
 
+@app.get("/api/ledger/export")
+def ledger_export() -> Response:
+    """Full Robustness Ledger as CSV — the evidence artifact judges can take away."""
+    rows = memory.ledger(limit=1000000)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["ts", "vector", "rail_profile", "n_txns", "n_dropped",
+                "detection_rate", "evasion_notes", "plan_json"])
+    for r in rows:
+        w.writerow([r["ts"], r["vector"], r["rail_profile"], r["n_txns"],
+                    r["n_dropped"], r["detection_rate"], r["evasion_notes"] or "",
+                    r["plan_json"]])
+    return Response(
+        buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=livefire_robustness_ledger.csv"},
+    )
+
+
 @app.get("/api/rounds")
 def rounds(limit: int = 50) -> dict:
     return {"rounds": memory.round_history(limit=limit)}
@@ -150,7 +206,8 @@ def rounds(limit: int = 50) -> dict:
 
 @app.post("/api/detect")
 def detect(req: DetectRequest) -> dict:
-    """Score transactions with the ensemble fitted in the last round.
+    """Score transactions with the ensemble from the last round (auto-reloaded
+    from the persisted artifact after a server restart).
     Cold-start caveat: velocity/graph windows only see this batch."""
     ens = _state.get("ensemble")
     if ens is None:
