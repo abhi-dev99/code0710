@@ -4,6 +4,25 @@ Every decision, change, and event logged here. Newest first.
 
 ---
 
+## 2026-08-25 — EXTERNAL-AUDIT REMEDIATION PASS (P0 → P3 of `external-audit/08_action-plan.md`)
+
+Worked the hostile external audit autonomously, dependency order. All commits atomic + pushed.
+
+- **P0.1 dotenv zombie KILLED**: `env_bootstrap.py` (idempotent, real-env-wins) called at every entry point — `app/api.py`, `tests/tournament_live.py`, `tests/capstone_live.py`, `tests/smoke_oxalpha.py`. Live-LLM path now runnable from a clean shell.
+- **P0-adjacent (found during P0.1): the dashboard's ox-alpha checkbox was a SILENT NO-OP** — `/api/round` and `/api/tournament` accepted `use_llm` but never constructed an `LLMClient`, and `run_round` requires one to plan with the LLM. All live-LLM results to date came from test scripts only. Fixed: lazy `get_llm()` wired into both endpoints; `/api/health` reports `llm_configured`.
+- **P0.3/P0.4 hygiene**: `tests/_*` artifacts and `external-audit/` gitignored (audit stays internal per 00_INDEX default until the team decides otherwise). HEAD == demoed behavior at every commit.
+- **T2 fix — SHAP channel fires on every path**: `_squad_plan_template` now parses the blue team's top SHAP features and biases mutations against them (amounts down if `amount` hot, inter-arrivals stretched if velocity hot, per-user devices + merchant multiplication if fan-out hot, window stretched if hour hot). Previously template squads ignored `shap_ctx` entirely.
+- **P1.1 + P1.3 THE CHART (`tests/breakthrough_hunt.py`)**: grid of 48 low-signature plans (₹3-30 micro-amounts, 48-96h windows starving 1h velocity, per-user devices, high merchant entropy) → **genuine total evasion: template det 80.9% → breakthrough 0.0%** (Δ 95% CI [+0.70, +0.92], 2000 bootstrap resamples — significant, not noise) → **blue recovers to 83.3% on a fresh never-seen weave after retraining** (CI [+0.70, +0.97], FP 0.83%). Honest caveat in the report: the breakthrough also evades the Isolation Forest tier (anomaly rate 0.0) — recovery came from retraining, not novelty detection.
+- **P2.1 FP regime**: operating point tightened 2% → **0.5% FP**; `max(0.5,…)` threshold floor dropped to 0.05; **`pr_auc` and `recall@FPR≤0.001`** now in every confusion matrix. New baseline at production FP: held-out det 42% @ ~0% FP (was 94% @ 2% — the old number would not have survived a judge's "crank FP down" question). Also fixed a latent bug: `calibrate()` fused with different weights (0.55/0.25, no rules) than `predict()` — thresholds were calibrated against the wrong score distribution.
+- **P2.3 zero-day tier**: `IFDetector` (Isolation Forest, benign-only fit, low fusion weight 0.10) → **blue_v2**, fusion XGB .50 / LR .20 / rules .20 / IF .10. Per-tier forensics in the breakthrough report.
+- **P2.2 latency**: `/api/detect` reports per-call features/scoring ms; rolling p50/p99 + throughput in `/api/health`; live badge on the dashboard.
+- **P2.4 minimum-viable Category D**: `memo_text` on every txn (benign memos vs LLM-injection memos for agentic vectors), heuristic `memo_injection_score` as the **16th feature** — D1/D3 are now representable and detectable end-to-end instead of aspirational.
+- **P3.1 Docker**: `Dockerfile` + `docker-compose.yml` (runtime LLM key injection, ledger volume) — clone → one command → arena at :8000.
+- **Battery at pass end**: E2E 6/6 · tournament 9/9 · stress 11/11 · breakthrough report generated · live 3-generation ox-alpha tournament (54 LLM plans incl. D1 agentic vector) launched for final evidence.
+- **Still open (user actions)**: P0.2 rotate pasted keys; P0.4 audit-visibility decision; P4 docx + demo video + submission checklist.
+
+---
+
 ## 2026-08-25 — RED TOURNAMENT: population-based red teaming (10x capacity mode)
 
 The red team stops being one-plan-per-vector meek. Per vector, a **squad** of candidate plans (default 10, up to 32) attacks per generation; blue retrains on everything seen so far; held-out candidates are scored individually and the **most evasive becomes the vector's champion**. SHAP intelligence from caught candidates is injected into the next generation's prompts ("DETECTOR INTELLIGENCE — starve these features"). Red now fields `squad_size × vectors × generations` plans vs blue's single retrain per generation.
