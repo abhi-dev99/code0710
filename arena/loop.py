@@ -352,22 +352,51 @@ def run_multi_rail(vector_ids: list[str] | None = None, n_benign: int = 1500,
 _SQUAD_CONCURRENCY = 8  # availability only (shared free pool); NOT a token cap
 
 
-def _squad_plan_template(vector_id: str, profile_key: str, idx: int, seed: int) -> dict[str, Any]:
+def _squad_plan_template(vector_id: str, profile_key: str, idx: int, seed: int,
+                         shap_ctx: str = "") -> dict[str, Any]:
     """Deterministic perturbed variant of the template plan — squad diversity
-    without an LLM (same plan family, different parameters)."""
+    without an LLM. SHAP-AWARE (audit T2): when the blue team's top features
+    are known, parameter mutations bias AGAINST those features, so the
+    intelligence channel fires on every path, not just the LLM one."""
     base = template_plan(vector_id, profile_key)
     rng = random.Random(seed * 7919 + idx * 104729)
+    # which features is blue leaning on? (shap_ctx: "name (shap=x); ...")
+    hot = set()
+    if shap_ctx:
+        for tok in shap_ctx.split(";"):
+            nm = tok.split("(")[0].strip()
+            if nm:
+                hot.add(nm)
+
+    def _bias(feature_set: set[str], low: float, high: float) -> float:
+        """Stronger mutation in the evasive direction when blue depends on
+        the related features."""
+        return rng.uniform(low, high) * (1.8 if hot & feature_set else 1.0)
+
     for rung in base["structuring"]:
-        rung["amount"] = round(min(max(rung["amount"] * rng.uniform(0.5, 1.6), 0.5), 1e9), 2)
+        # blue watching amounts -> shrink amounts harder
+        rung["amount"] = round(min(max(rung["amount"] * _bias(
+            {"amount", "amt_vs_user_median", "user_sum_1h"}, 0.5, 1.6), 0.5), 1e9), 2)
         rung["count"] = max(3, int(rung["count"] * rng.uniform(0.5, 1.5)))
     ia = base["inter_arrival_s"]
-    ia["min"] = max(1, int(ia["min"] * rng.uniform(0.4, 1.8)))
-    ia["max"] = max(ia["min"] + 5, int(ia["max"] * rng.uniform(0.5, 2.0)))
+    # blue watching velocity -> spread inter-arrivals out
+    ia["min"] = max(1, int(ia["min"] * _bias(
+        {"user_cnt_1h", "device_cnt_1h", "user_sum_1h", "user_merchants_1h"}, 0.4, 1.8)))
+    ia["max"] = max(ia["min"] + 5, int(ia["max"] * _bias(
+        {"user_cnt_1h", "device_cnt_1h", "user_sum_1h", "user_merchants_1h"}, 0.5, 2.0)))
     ec = base["entity_cardinality"]
     ec["users"] = max(2, int(ec["users"] * rng.uniform(0.5, 2.0)))
-    ec["devices"] = max(1, int(ec["devices"] * rng.uniform(0.5, 2.0)))
-    ec["merchants"] = max(1, int(ec["merchants"] * rng.uniform(0.5, 2.0)))
-    base["window_h"] = max(1, int(base["window_h"] * rng.uniform(0.5, 2.0)))
+    # blue watching device/merchant fan-out -> give every user their own device,
+    # multiply merchants so pairs never repeat
+    if hot & {"device_users", "merchant_users", "user_merchant_repeats"}:
+        ec["devices"] = max(ec["users"], int(ec["devices"] * 1.5))
+        ec["merchants"] = max(int(ec["merchants"] * 2.0), ec["users"])
+    else:
+        ec["devices"] = max(1, int(ec["devices"] * rng.uniform(0.5, 2.0)))
+        ec["merchants"] = max(1, int(ec["merchants"] * rng.uniform(0.5, 2.0)))
+    # blue watching hour concentration -> stretch the window across the day
+    base["window_h"] = max(1, int(base["window_h"] * _bias(
+        {"hour_sin", "hour_cos", "is_night"}, 0.5, 2.0)))
     base["amount_jitter_pct"] = round(min(0.4, base["amount_jitter_pct"] * rng.uniform(0.5, 3.0)), 3)
     base["_squad_idx"] = idx
     return base
@@ -502,12 +531,12 @@ def run_tournament(
             for j in range(squad_size):
                 plan = plans[j]
                 if plan is None:
-                    plan = _squad_plan_template(vid, profile_key, j, seed + gen)
+                    plan = _squad_plan_template(vid, profile_key, j, seed + gen, shap_ctx)
                 else:
                     n_llm += 1
                 out = weave_attack_plan(plan, profile=p, seed=seed + 1000 * gen + 100 * vi + j)
                 if not out["ok"]:
-                    out = weave_attack_plan(_squad_plan_template(vid, profile_key, j, seed + gen),
+                    out = weave_attack_plan(_squad_plan_template(vid, profile_key, j, seed + gen, shap_ctx),
                                             profile=p, seed=seed + 1000 * gen + 100 * vi + j)
                 if not out["ok"]:
                     # last resort: the canonical template is always weavable
