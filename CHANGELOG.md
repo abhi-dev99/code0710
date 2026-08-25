@@ -4,6 +4,21 @@ Every decision, change, and event logged here. Newest first.
 
 ---
 
+## 2026-08-26 — BACKLOG SPRINT + SELF-REPORTED CALIBRATION FINDING
+
+Backlog commits landed as granular history (majority abhi-dev99; aditya-shah07 docs truth pass via
+`aditya/docs-truth-pass`; AayushW26 LLM hardening via `aayush/llm-hardening`, both merged --no-ff):
+
+- **S4 docs truth pass**: ARCHITECTURE fusion weights corrected to match code (XGB .50/LR .20/rules .20/IF .10); stale "92–98% @ ≤1.3% FP / F1 0.92" constants replaced with measured-per-run policy; LITERATURE GNN/LLM-semantic tiers marked DESCOPED; dead deps dropped (lightgbm/redis/websockets/locust/matplotlib/imbalanced-learn).
+- **LLM client hardening** (audit 06 open items): markdown fence-stripping in complete_json; shared AsyncClient keepalive pool + aclose(); Retry-After honored as float or HTTP-date on all retry paths (non-429 floats were silently ignored).
+- **recall@FPR realized budget**: ceil→floor so realized_fpr ≤ nominal 0.001; confusion() reports both nominal and realized (R13 accepted-not-fixed item closed).
+- **ULB backbone persistence**: trainer pins K1 determinism (n_jobs=1/hist) and saves `defense/models/artifacts/ulb_backbone.joblib` — the real-data model is now loadable, not just documented.
+- **⚠ SELF-REPORTED (R14)**: calibration-pool sweep exposed **threshold leakage in legacy "98% detection" headlines** — the 375-row benign pool underestimated the score tail (realized FP 1.6% vs 0.5% target). New default `n_calib_benign=1000` puts realized FP ON target with detection honestly re-based to ~70%; full sweep table committed (`tests/calib_sweep.py`) and filed as `external-audit/responses/R14_selfreported-calibration-threshold-leakage.md`. Docx must quote ~70%@~0.5%FP (per-run measured), never 92–98%.
+
+Battery at close: E2E 6/6 · Tournament 9/9 · llm_client hardening checks passed.
+
+---
+
 ## 2026-08-25 — RE-AUDIT (files 11+12) KILL-FIX PASS
 
 The external auditor re-audited with five parallel subsystem audits and adjudicated our responses.
