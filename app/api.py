@@ -138,6 +138,21 @@ def health() -> dict:
         "ensemble_artifact": str(ENSEMBLE_ARTIFACT.relative_to(_ROOT))
         if ENSEMBLE_ARTIFACT.exists() else None,
         "llm_configured": get_llm() is not None,
+        "detect_latency_ms": _latency_summary(),
+    }
+
+
+def _latency_summary() -> dict | None:
+    """p50/p99 scoring latency over the rolling /api/detect window (P2.2)."""
+    lat = _state.get("latency_ms") or []
+    if not lat:
+        return None
+    xs = sorted(lat)
+    return {
+        "n_calls": len(xs),
+        "p50_ms": round(xs[len(xs) // 2], 2),
+        "p99_ms": round(xs[min(len(xs) - 1, int(len(xs) * 0.99))], 2),
+        "throughput_per_sec": round(1000.0 / max(xs[len(xs) // 2], 0.01), 0),
     }
 
 
@@ -279,6 +294,8 @@ def detect(req: DetectRequest) -> dict:
     """Score transactions with the ensemble from the last round (auto-reloaded
     from the persisted artifact after a server restart).
     Cold-start caveat: velocity/graph windows only see this batch."""
+    import time
+
     ens = _state.get("ensemble")
     if ens is None:
         raise HTTPException(409, "no ensemble ready — POST /api/round first")
@@ -293,14 +310,24 @@ def detect(req: DetectRequest) -> dict:
         t.setdefault("merchant_id", t.get("merchant_id") or "api_merchant")
         t.setdefault("location_distance_km", 0.0)
         txns.append(t)
+    t0 = time.perf_counter()
     try:
         X = build_features(txns).to_numpy()
     except Exception as e:
         raise HTTPException(400, f"feature extraction failed: {type(e).__name__}: {e}") from e
+    t1 = time.perf_counter()
     res = ens.predict(X)
+    t2 = time.perf_counter()
+    feat_ms, score_ms = round((t1 - t0) * 1000, 2), round((t2 - t1) * 1000, 2)
+    with _state_lock:
+        lat = _state.setdefault("latency_ms", [])
+        lat.append(score_ms)
+        del lat[:-500]  # rolling window
     return {
         "blue_version": ens.version,
         "threshold": round(ens.threshold, 4),
+        "latency_ms": {"features": feat_ms, "scoring": score_ms,
+                       "total": round(feat_ms + score_ms, 2), "n_txns": len(txns)},
         "results": [
             {
                 "txn_id": txns[i].get("txn_id", str(i)),

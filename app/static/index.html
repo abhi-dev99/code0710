@@ -220,7 +220,7 @@ async function runDetect(){
   catch(e){out.innerHTML='<span class="r">invalid JSON</span>';return;}
   try{
     const r=await post("/api/detect",{transactions:txns});
-    out.innerHTML=`<div class="muted">blue=${r.blue_version} &middot; threshold=${r.threshold}</div>`+
+    out.innerHTML=`<div class="muted">blue=${r.blue_version} &middot; threshold=${r.threshold} &middot; score ${r.latency_ms.scoring}ms (${r.latency_ms.n_txns} txns)</div>`+
       `<table><tr><th>txn</th><th>flagged</th><th>fused</th><th>xgb</th><th>novelty</th></tr>`+
       r.results.map(x=>`<tr><td>${x.txn_id}</td><td class="${x.flagged?'r':'g'}">${x.flagged}</td><td>${x.fused_score}</td><td>${x.score_xgb}</td><td>${x.novelty_flag?'<span class="a">yes</span>':'no'}</td></tr>`).join("")+"</table>";
   }catch(e){out.innerHTML='<span class="r">'+e.message+"</span>";}
