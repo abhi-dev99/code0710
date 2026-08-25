@@ -4,6 +4,24 @@ Every decision, change, and event logged here. Newest first.
 
 ---
 
+## 2026-08-25 — RE-AUDIT (files 11+12) KILL-FIX PASS
+
+The external auditor re-audited with five parallel subsystem audits and adjudicated our responses.
+Four of our CLOSED tags were downgraded on re-execution — all accepted. Kill findings fixed same-day
+(`20792c3`, battery green E2E 6/6 · tournament 9/9):
+
+- **K1 reproducibility**: XGB nondeterminism pinned (`n_jobs=1`, `tree_method="hist"`); breakthrough hunt re-run at 3 seeds — **evasion 0.0% on all 48 configs × 3 seeds (robust); recovery 66.7–86.7% range (real, variable), all CIs excluding zero**. Recovery relabeled honestly: same-family different-seed, not "never-seen". Evidence committed under `evidence/` (K2).
+- **K3**: `sprint/final-e2e` merged into `main` — judges landing on the default branch now see the product, not the Phase-A scaffold. (Was team-reserved; audit's DQ framing overrode.)
+- **K4 Docker spiral**: `real_anchor()` uniform fallback with loud not-anchored warning (Dockerfile claim now true); `LIVEFIRE_DB` env + compose volume path fixed so the ledger actually persists.
+- **K5 crash buttons**: single-vector LR guard (template filler campaign); multi-rail pops `_ensemble`; `/api/detect` 400s on non-finite amounts and wraps scoring.
+- **S6 resilience**: malformed/HTML-200 bodies retry with backoff (batch-killing class dead); temperature ladder capped at 2.0; campaign ids sha1-reproducible.
+- **S3**: `amt_vs_user_median` clipped to 50 (was saturating LR at 2.5e9). Off-by-one framing disputed in R13.
+- **S5**: e2e FP assertion tightened 5% → 2%.
+- **Accepted-not-yet-fixed** (queued, docx wording rules in R13): measured-vs-target FP gap (0.5% target, 0–4% realized — n=300 calib pool too small), recall@FPR realized-budget naming, docs truth pass (S4), taxonomy representability matrix in docx, score-only ablation, behavioral-fidelity gate.
+- Responses: `external-audit/responses/R13_full-reaudit-synthesis.md`; R00 scoreboard corrected per audit 12's adjudication.
+
+---
+
 ## 2026-08-25 — EXTERNAL-AUDIT REMEDIATION PASS (P0 → P3 of `external-audit/08_action-plan.md`)
 
 Worked the hostile external audit autonomously, dependency order. All commits atomic + pushed.
