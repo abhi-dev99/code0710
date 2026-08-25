@@ -36,6 +36,12 @@ for p in ("attacks", "config", "defense", "arena"):
     sp = str(_ROOT / p)
     if sp not in sys.path:
         sys.path.insert(0, sp)
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from env_bootstrap import load_env  # noqa: E402
+
+load_env()  # P0.1: .env at every entry point (external-audit/08 P0.1)
 
 from arena.loop import VECTORS, run_multi_rail, run_round, run_tournament  # noqa: E402
 from rail_profiles import PROFILES  # noqa: E402
@@ -72,6 +78,25 @@ def _load_persisted_ensemble() -> bool:
 
 
 ENSEMBLE_RELOADED = _load_persisted_ensemble()
+
+# ---- lazy red-team LLM client: the dashboard's ox-alpha checkbox must actually
+# reach the planner (audit finding: use_llm was silently a no-op via the API) ----
+_llm_client: Any = None
+_llm_tried = False
+
+
+def get_llm() -> Any:
+    global _llm_client, _llm_tried
+    if _llm_client is None and not _llm_tried:
+        _llm_tried = True
+        try:
+            from redagent.core.llm_client import LLMClient
+
+            _llm_client = LLMClient.from_env()
+            print("[api] red-team LLM client configured")
+        except Exception as e:
+            print(f"[api] LLM client unavailable ({type(e).__name__}: {e}) — template mode only")
+    return _llm_client
 
 
 class RoundRequest(BaseModel):
@@ -112,6 +137,7 @@ def health() -> dict:
         "ensemble_ready": _state["ensemble"] is not None,
         "ensemble_artifact": str(ENSEMBLE_ARTIFACT.relative_to(_ROOT))
         if ENSEMBLE_ARTIFACT.exists() else None,
+        "llm_configured": get_llm() is not None,
     }
 
 
@@ -157,6 +183,7 @@ def post_round(req: RoundRequest) -> dict:
         summary = run_round(
             profile_key=req.rail_profile, vector_ids=req.vector_ids,
             n_benign=req.n_benign, seed=req.seed, use_llm=req.use_llm, memory=memory,
+            llm=get_llm() if req.use_llm else None,
         )
     except Exception as e:  # surface failures to the UI, never 500-silently
         raise HTTPException(500, f"round failed: {type(e).__name__}: {e}") from e
@@ -199,6 +226,7 @@ def post_tournament(req: TournamentRequest) -> dict:
             profile_key=req.rail_profile, vector_ids=req.vector_ids,
             n_benign=req.n_benign, seed=req.seed, use_llm=req.use_llm,
             squad_size=req.squad_size, generations=req.generations, memory=memory,
+            llm=get_llm() if req.use_llm else None,
         )
     except Exception as e:
         raise HTTPException(500, f"tournament failed: {type(e).__name__}: {e}") from e

@@ -14,14 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# load .env (simple KEY=VALUE parser — no external dependency)
-_env = ROOT / ".env"
-if _env.exists():
-    for _line in _env.read_text(encoding="utf-8-sig").splitlines():
-        _line = _line.strip()
-        if _line and not _line.startswith("#") and "=" in _line:
-            _k, _, _v = _line.partition("=")
-            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+from env_bootstrap import load_env  # noqa: E402
+
+load_env()
 
 from arena.loop import run_tournament  # noqa: E402
 from attacks.redagent.core.llm_client import LLMClient  # noqa: E402

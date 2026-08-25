@@ -4,10 +4,19 @@ __pycache__/
 .venv/
 venv/
 
-# Secrets & local state
+# .env is loaded by env_bootstrap at every entry point; never commit secrets
 .env
+*.env
+!settings.example.env
 *.db
 *.sqlite3
+
+# audit stays internal until the team decides otherwise (external-audit/00_INDEX.md)
+external-audit/
+
+# throwaway test/run artifacts
+tests/_*
+
 
 # Data — never commit datasets; manifest hashes only
 data/raw/*.csv

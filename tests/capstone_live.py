@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
-    line = line.strip()
-    if line and not line.startswith("#") and "=" in line:
-        k, _, v = line.partition("=")
-        os.environ.setdefault(k.strip(), v.strip())
+sys.path.insert(0, str(ROOT))
+
+from env_bootstrap import load_env  # noqa: E402
+
+load_env()
 for p in ("attacks", "config", "defense", "arena"):
     sp = str(ROOT / p)
     if sp not in sys.path:
