@@ -8,6 +8,7 @@ Endpoints:
   GET  /api/profiles      -> rail profiles
   GET  /api/real-metrics  -> honest ULB real-data backbone metrics
   POST /api/round         -> run one arena round (red->weave->blue->explain->ledger)
+  POST /api/tournament    -> RED TOURNAMENT (squad-based population red-teaming)
   POST /api/multi-rail    -> same vectors across ALL rail profiles
   GET  /api/ledger        -> Robustness Ledger (campaigns)
   GET  /api/ledger/export -> full ledger as CSV download
@@ -36,7 +37,7 @@ for p in ("attacks", "config", "defense", "arena"):
     if sp not in sys.path:
         sys.path.insert(0, sp)
 
-from arena.loop import VECTORS, run_multi_rail, run_round  # noqa: E402
+from arena.loop import VECTORS, run_multi_rail, run_round, run_tournament  # noqa: E402
 from rail_profiles import PROFILES  # noqa: E402
 from redagent.core.strategy_memory import StrategyMemory  # noqa: E402
 
@@ -83,6 +84,16 @@ class RoundRequest(BaseModel):
 
 class DetectRequest(BaseModel):
     transactions: list[dict[str, Any]]
+
+
+class TournamentRequest(BaseModel):
+    rail_profile: str = Field(default="card_intl")
+    vector_ids: list[str] | None = None
+    n_benign: int = Field(default=2400, ge=400, le=20000)
+    seed: int = Field(default=710)
+    use_llm: bool = Field(default=False)
+    squad_size: int = Field(default=10, ge=2, le=32, description="red candidates per vector per generation")
+    generations: int = Field(default=2, ge=1, le=5)
 
 
 @app.get("/")
@@ -170,6 +181,37 @@ def post_multi_rail(req: RoundRequest) -> dict:
     with _state_lock:
         _state["rounds_run"] += 1
     return out
+
+
+@app.post("/api/tournament")
+def post_tournament(req: TournamentRequest) -> dict:
+    """RED TOURNAMENT: squad_size red candidates per vector per generation,
+    tournament-selected for maximum evasion, mutating across generations via
+    SHAP feedback. The 10x red-vs-blue capacity mode."""
+    if req.rail_profile not in PROFILES:
+        raise HTTPException(400, f"unknown rail profile: {req.rail_profile}")
+    if req.vector_ids:
+        bad = [v for v in req.vector_ids if v not in VECTORS]
+        if bad:
+            raise HTTPException(400, f"unknown vector ids: {bad}")
+    try:
+        summary = run_tournament(
+            profile_key=req.rail_profile, vector_ids=req.vector_ids,
+            n_benign=req.n_benign, seed=req.seed, use_llm=req.use_llm,
+            squad_size=req.squad_size, generations=req.generations, memory=memory,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"tournament failed: {type(e).__name__}: {e}") from e
+    ens = None
+    with _state_lock:
+        ens = summary.pop("_ensemble", None)
+        _state["ensemble"] = ens
+        _state["last_round"] = {"mode": "tournament", "rail_profile": summary["rail_profile"],
+                                "escalation": summary["escalation"]}
+        _state["rounds_run"] += 1
+    if ens is not None:
+        _persist_ensemble(ens)
+    return summary
 
 
 @app.get("/api/ledger")

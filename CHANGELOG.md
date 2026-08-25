@@ -4,6 +4,18 @@ Every decision, change, and event logged here. Newest first.
 
 ---
 
+## 2026-08-25 — RED TOURNAMENT: population-based red teaming (10x capacity mode)
+
+The red team stops being one-plan-per-vector meek. Per vector, a **squad** of candidate plans (default 10, up to 32) attacks per generation; blue retrains on everything seen so far; held-out candidates are scored individually and the **most evasive becomes the vector's champion**. SHAP intelligence from caught candidates is injected into the next generation's prompts ("DETECTOR INTELLIGENCE — starve these features"). Red now fields `squad_size × vectors × generations` plans vs blue's single retrain per generation.
+
+- **Arena core** (`arena/loop.py`): `run_tournament()` — generation loop, 70/30 train/held-out squad split per vector, per-candidate detection scoring, champion selection, per-generation ledger writes, escalation curve + `red_advantage` in the summary. `_llm_squad_async`: concurrent candidate generation (temperature ladder 0.7→0.7+0.05i, explicit diversification orders, semaphore-8 for pool availability — **no token caps by design**). `_squad_plan_template`: seeded perturbation variants keep template mode competitive at zero tokens. Fallback chain: LLM plan → perturbed template → canonical template (never lose the round; fixed `campaign_id` KeyError when a weave fails validation twice).
+- **API** (`app/api.py`): `POST /api/tournament` (squad_size 2-32, generations 1-5); persists the final-generation ensemble.
+- **Dashboard**: squad-size + generations inputs, **⚔ RED TOURNAMENT** button, escalation-curve bar chart (per-gen held-out detection), champions table with LLM badges, SHAP→mutation panel.
+- **Tests**: `tests/tournament_test.py` 9/9 (template mode, zero tokens: structure, squad math, champion-is-min-per-vector, FP constraint, ledger); `tests/tournament_live.py` for real ox-alpha squad validation. E2E still 6/6.
+- Token economics: full 4-vector × 10-squad × 2-gen LLM tournament ≈ 80 plan calls (~3K tokens each incl. max-effort reasoning) ≈ 250K tokens — by design, ox-alpha is $0.
+
+---
+
 ## 2026-08-25 — Product-completeness pass: persistence, export, round history, detect playground
 
 Audit found real unbuilt surface (not cosmetics). All fixed and live-verified (tests/verify_product.py 6/6):
