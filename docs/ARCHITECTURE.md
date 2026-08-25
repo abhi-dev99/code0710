@@ -26,8 +26,8 @@
 ┌──────────── BLUE (heterogeneous ensemble) ────────────────────────────────┐
 │ arena_features.py behavioral + causal velocity windows + entity-graph     │
 │                   fan-out (15 dims, stationary by design)                 │
-│ models/backbone.py XGB (55%) + LR (25%) + rules (20%) fusion              │
-│   threshold calibrated on a HELD-OUT benign slice → ≤2% benign FP         │
+│ models/backbone.py XGB (50%) + LR (20%) + rules (20%) + IF (10%) fusion       │
+│   threshold calibrated on a HELD-OUT benign slice → 0.5% FP target        │
 │   disagreement → novelty flag (suspicious-but-under-threshold)            │
 └──────────────────────────────┬────────────────────────────────────────────┘
                                ▼
@@ -51,7 +51,10 @@
    AP 0.8738. This is the number that says "the ML works on real fraud."
 2. **Arena detection** — `arena/loop.py` cross-vector protocol: ensemble trains
    on attacks from k−1 vectors, evaluated on a **held-out vector it has never
-   seen**. Result: 92–98% detection at ≤1.3% benign FP, F1 0.92.
+   seen**. Detection is vector-dependent — every run reports its own measured
+   detection AND realized benign FP next to the 0.5% calibration target;
+   multi-seed evidence lives in `evidence/`, run history in `CHANGELOG.md`.
+   Never quote stale constants here.
 3. The two are reported separately, always. Arena metrics measure synthetic-
    attack detection against real-anchored benign traffic — never presented as
    real-fraud performance. (This avoids the fatal training/serving skew that
@@ -75,5 +78,5 @@
 | LLM refuses "attack plan" framing | generator-parameters interface (sanctioned-benchmark framing) |
 | Label/row misalignment in features | build_features returns original stream order (tested) |
 | Feature drift across slices | causal windowed features; drift checked in dev |
-| FP explosion | held-out benign calibration slice, target ≤2% |
+| FP explosion | held-out benign calibration slice — threshold targets 0.5% FP on calibration; realized FP on fresh draws is reported next to it, never silently assumed |
 | In-sample detection inflation | cross-vector holdout protocol; in-sample rates labeled |
