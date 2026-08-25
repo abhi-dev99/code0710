@@ -63,7 +63,7 @@ def main() -> int:
     # Full set is ~500MB compressed; keep train_transaction.csv as the anchor.
     src = next(ieee_dir.rglob("train_transaction.csv"))
     dst = RAW_DIR / "ieee_cis_train_transaction.csv"
-    dst.write_bytes(src.read_bytes())
+    shutil.copyfile(src, dst)
     entries[str(dst.relative_to(RAW_DIR))] = {
         "sha256": _sha256(dst), "bytes": dst.stat().st_size,
         "source": "kaggle:ieee-fraud-detection (Vesta)", "real_data": True,
