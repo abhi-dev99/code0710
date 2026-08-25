@@ -28,6 +28,21 @@ class LLMError(RuntimeError):
     pass
 
 
+def _strip_code_fences(text: str) -> str:
+    """Models frequently wrap JSON in ```json ...``` fences even when
+    response_format=json_object is honored upstream (audit 06 open item).
+    Strip the fence pair before parsing; return original if no fence found."""
+    s = text.strip()
+    if not s.startswith("```"):
+        return s
+    first_nl = s.find("\n")
+    if first_nl != -1:
+        s = s[first_nl + 1:]
+    if s.rstrip().endswith("```"):
+        s = s.rstrip()[:-3]
+    return s.strip()
+
+
 class _RateLimiter:
     """Shared min-interval throttle across all calls on one client.
 
@@ -195,10 +210,15 @@ class LLMClient:
     async def complete_json(self, tier: str, **kw: Any) -> dict[str, Any]:
         kw["json_mode"] = True
         raw = await self.complete(tier, **kw)
-        try:
-            return json.loads(raw, strict=False)  # strict=False: tolerate raw control chars in strings
-        except json.JSONDecodeError as e:
-            raise LLMError(f"Model returned invalid JSON: {raw[:200]}...") from e
+        # try raw first (fast path), then fence-stripped (audit 06: models wrap
+        # JSON in markdown fences despite json_mode — batch-killing parse class)
+        last_err: json.JSONDecodeError | None = None
+        for candidate in (raw, _strip_code_fences(raw)):
+            try:
+                return json.loads(candidate, strict=False)  # strict=False: tolerate raw control chars
+            except json.JSONDecodeError as e:
+                last_err = e
+        raise LLMError(f"Model returned invalid JSON: {raw[:200]}...") from last_err
 
     async def complete_many(
         self, tier: str, prompts: list[str], *, max_concurrency: int = 32, **kw: Any
