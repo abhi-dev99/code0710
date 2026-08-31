@@ -1,15 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Activity, ShieldAlert, Cpu, Network } from 'lucide-react';
 
 export default function App() {
   const [health, setHealth] = useState<any>(null);
+  const [stream, setStream] = useState<string[]>([
+    '[ System Initialized. Awaiting live-fire telemetry... ]'
+  ]);
+  const wsRef = useRef<WebSocket | null>(null);
+  const streamEndRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     fetch('http://localhost:8000/api/health')
       .then(r => r.json())
       .then(data => setHealth(data))
       .catch(e => console.error("API error", e));
+
+    const connectWs = () => {
+      const ws = new WebSocket('ws://localhost:8000/ws/stream');
+      
+      ws.onopen = () => {
+        setStream(prev => [...prev, '[ WebSocket Connected: 🟢 ]']);
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'detect') {
+            const logs = data.results.map((r: any) => 
+              `> TXN: ${r.txn_id} | FUSED: ${r.fused_score} | FLAG: ${r.flagged ? '🟥 MULE' : '🟩 BENIGN'}`
+            );
+            setStream(prev => {
+                const updated = [...prev, ...logs];
+                // Keep only last 100 logs to prevent lag
+                return updated.slice(-100);
+            });
+          } else if (data.type === 'round_complete') {
+            setStream(prev => [...prev, `[ Round Complete. Benign: ${data.summary.benign_total}, Vectors: ${data.summary.vectors_run} ]`]);
+          }
+        } catch (e) {
+          console.error('WS Parse Error', e);
+        }
+      };
+      
+      ws.onclose = () => {
+        setStream(prev => [...prev, '[ WebSocket Disconnected: 🔴 Reconnecting in 3s... ]']);
+        setTimeout(connectWs, 3000);
+      };
+      
+      wsRef.current = ws;
+    };
+    
+    connectWs();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
   }, []);
+
+  // Auto-scroll to bottom of stream
+  useEffect(() => {
+    streamEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [stream]);
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-8 font-mono">
@@ -29,13 +82,21 @@ export default function App() {
       </header>
       
       <main className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="col-span-2 bg-gray-900 border border-gray-800 rounded-lg p-6">
+        <div className="col-span-2 bg-gray-900 border border-gray-800 rounded-lg p-6 flex flex-col">
           <h2 className="text-xl font-semibold mb-4 text-gray-300 flex items-center gap-2">
             <Activity className="text-red-400" /> Live Transaction Stream
           </h2>
-          <div className="h-96 bg-gray-950 rounded border border-gray-800 flex items-center justify-center text-gray-600 relative overflow-hidden">
-            <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-400 via-gray-900 to-gray-950"></div>
-            <p className="z-10">[ WebSocket Stream Connecting... ]</p>
+          <div className="flex-1 min-h-[400px] max-h-[600px] bg-gray-950 rounded border border-gray-800 p-4 relative overflow-y-auto font-mono text-sm">
+            <div className="absolute inset-0 opacity-5 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-400 via-gray-900 to-gray-950 pointer-events-none"></div>
+            
+            <div className="relative z-10 flex flex-col gap-1">
+              {stream.map((log, i) => (
+                <div key={i} className={`${log.includes('🟥') ? 'text-red-400' : log.includes('🟩') ? 'text-emerald-400' : 'text-gray-500'}`}>
+                  {log}
+                </div>
+              ))}
+              <div ref={streamEndRef} />
+            </div>
           </div>
         </div>
 
