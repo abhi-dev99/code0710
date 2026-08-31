@@ -133,6 +133,7 @@ def weave_attack_plan(
     profile: RailProfile | str | None = None,
     campaign_id: str | None = None,
     seed: int = 710,
+    now_override: datetime | None = None,
 ) -> dict[str, Any]:
     """Compile a validated plan into constraint-checked attack transactions."""
     p = get_profile(profile)
@@ -145,7 +146,7 @@ def weave_attack_plan(
     campaign_id = campaign_id or f"cmp_{p.key}_{seed}_{plan_hash}"
     tz = ZoneInfo(p.timezone_name)
     ch = p.channels[str(plan["channel"])]
-    now = datetime.now(tz).replace(microsecond=0)
+    now = now_override or datetime.now(tz).replace(microsecond=0)
     window_h = float(plan.get("window_h", 24.0))
     jitter_pct = float(plan.get("amount_jitter_pct", 0.05))
     start = now - timedelta(hours=window_h)
@@ -183,8 +184,8 @@ def weave_attack_plan(
         else:
             dt_h = (t - prev["timestamp"]).total_seconds() / 3600.0
             straight = _haversine_km(prev["lat"], prev["lon"], lat, lon)
-            # cap emitted distance so travel physics stay physically plausible
-            dist_km = round(min(straight, max(dt_h, 0.02) * 900.0), 2)
+            # Use actual straight-line distance; let constraint engine validate physics
+            dist_km = round(straight, 2)
         txn = {
             "txn_id": f"{campaign_id}_t{len(txns):06d}",
             "user_id": u,
@@ -244,13 +245,14 @@ def generate_benign(
     seed: int = 710,
     amount_pool: Any = None,
     hour_weights: list[float] | None = None,
+    now_override: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Generate benign traffic. When amount_pool/hour_weights are supplied they
     MUST be bootstrapped from a real corpus — honesty protocol (docs/AUDIT.md)."""
     p = get_profile(profile)
     rng = np.random.default_rng(seed + 1)
     tz = ZoneInfo(p.timezone_name)
-    now = datetime.now(tz).replace(microsecond=0)
+    now = now_override or datetime.now(tz).replace(microsecond=0)
 
     ch_names = list(p.channels.keys())
     ch_weights = np.array([p.channels[c].weight for c in ch_names], dtype=float)
