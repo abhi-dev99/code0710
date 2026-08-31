@@ -22,20 +22,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-_VENDOR_ML = Path(__file__).resolve().parents[3] / "vendor" / "argus" / "backend" / "ml"
-if str(_VENDOR_ML) not in sys.path:
-    sys.path.insert(0, str(_VENDOR_ML))
+# Import config and vendor modules without polluting sys.path
+from config.rail_profiles import RailProfile, get_profile  # noqa: E402
 
-_CONFIG_ROOT = Path(__file__).resolve().parents[3] / "config"
-if str(_CONFIG_ROOT) not in sys.path:
-    sys.path.insert(0, str(_CONFIG_ROOT))
+# Vendor imports - explicit path
+_VENDOR_ML = Path(__file__).resolve().parents[3] / "vendor" / "argus" / "backend" / "ml"
+if _VENDOR_ML.exists():
+    sys.path.insert(0, str(_VENDOR_ML))
 
 from dataset_config import (  # noqa: E402
     CATEGORY_AMOUNTS,
     CHANNELS,
     REGULATORY_LIMITS,
 )
-from rail_profiles import RailProfile, get_profile  # noqa: E402
 
 
 @dataclass

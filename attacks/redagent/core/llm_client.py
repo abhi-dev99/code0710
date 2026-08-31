@@ -127,17 +127,21 @@ class LLMClient:
             await self._cx.aclose()
 
     @classmethod
-    def from_env(cls) -> "LLMClient":
+    def from_env(cls) -> "LLMClient | None":
+        base_url = os.environ.get("LLM_BASE_URL", "").strip()
+        api_key = os.environ.get("LLM_API_KEY", "").strip()
+        if not base_url or not api_key:
+            return None
         # Free-tier ':free' models get aggressive default throttling.
         default_interval = 3.0 if ":free" in os.environ.get("LLM_MODEL_STRATEGY", "") + os.environ.get("LLM_MODEL_BULK", "") else 0.0
         return cls(
-            base_url=os.environ.get("LLM_BASE_URL", ""),
-            api_key=os.environ.get("LLM_API_KEY", ""),
+            base_url=base_url,
+            api_key=api_key,
             models={
                 "strategy": os.environ.get("LLM_MODEL_STRATEGY", ""),
                 "bulk": os.environ.get("LLM_MODEL_BULK", ""),
             },
-            min_interval_s=float(os.environ.get("LLM_MIN_INTERVAL_S", default_interval)),
+            min_interval_s=float(os.environ.get("LLM_MIN_INTERVAL_S", 3.0 if ":free" in os.environ.get("LLM_MODEL_STRATEGY", "") + os.environ.get("LLM_MODEL_BULK", "") else 0.0)),
             reasoning_effort=(os.environ.get("LLM_REASONING_EFFORT", "").strip() or None),
         )
 
