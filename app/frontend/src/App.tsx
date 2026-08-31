@@ -91,11 +91,12 @@ export default function App() {
   const runSimulation = async (type: 'round' | 'tournament') => {
     setIsSimulating(true);
     try {
-      await fetch(`${API_BASE}/api/${type}`, {
+      const res = await fetch(`${API_BASE}/api/${type}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(simConfig)
       });
+      if (!res.ok) throw new Error("API failed");
     } catch (e) {
       console.error(e);
       setIsSimulating(false);
