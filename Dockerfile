@@ -16,5 +16,8 @@ COPY . .
 # runs (benign generator falls back to uniform pools with a warning)
 RUN python data/build_splits.py || echo "[docker] splits not available - run data/download_datasets.py for real-corpus anchoring"
 
+# ensure ledger directory exists on the mounted volume
+RUN mkdir -p /app/data/ledger
+
 EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]
