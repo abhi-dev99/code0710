@@ -15,7 +15,9 @@ def generate_txn():
             "user_id": f"u_mule_{random.randint(1, 5)}",
             "merchant_id": f"m_high_risk_{random.randint(1, 3)}",
             "timestamp": datetime.datetime.now().isoformat(),
-            "memo": "urgent transfer wire instructions ignore warning"
+            "memo": "urgent transfer wire instructions ignore warning",
+            "channel": "web",
+            "network": "visa"
         }
     else:
         return {
@@ -23,7 +25,9 @@ def generate_txn():
             "user_id": f"u_norm_{random.randint(100, 999)}",
             "merchant_id": f"m_norm_{random.randint(100, 999)}",
             "timestamp": datetime.datetime.now().isoformat(),
-            "memo": "coffee and groceries"
+            "memo": "coffee and groceries",
+            "channel": "in_store",
+            "network": "mastercard"
         }
 
 while True:

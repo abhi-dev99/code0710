@@ -124,7 +124,6 @@ class TournamentRequest(BaseModel):
 
 @app.get("/")
 def index():
-    # Redirect root to the Vite dev server for the React UI
     return RedirectResponse(url="http://localhost:5173")
 
 @app.get("/api/health")
@@ -160,7 +159,7 @@ def profiles() -> dict:
 
 @app.post("/api/round")
 def post_round(req: RoundRequest) -> dict:
-    import asyncio
+    import anyio
     try:
         summary = run_round(
             profile_key=req.rail_profile, vector_ids=req.vector_ids,
@@ -178,10 +177,8 @@ def post_round(req: RoundRequest) -> dict:
     if ens is not None:
         _persist_ensemble(ens)
     
-    # Broadcast to UI
     try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(manager.broadcast(json.dumps({"type": "round_complete", "summary": summary})))
+        anyio.from_thread.run(manager.broadcast, json.dumps({"type": "round_complete", "summary": summary}))
     except Exception:
         pass
 
@@ -216,7 +213,7 @@ def ledger(limit: int = 100) -> dict:
     return {"campaigns": rows, "vector_stats": memory.vector_stats()}
 
 @app.post("/api/detect")
-def detect(req: DetectRequest) -> dict:
+async def detect(req: DetectRequest) -> dict:
     import time
     ens = _state.get("ensemble")
     if ens is None:
@@ -254,10 +251,8 @@ def detect(req: DetectRequest) -> dict:
         for i in range(len(txns))
     ]
     
-    import asyncio
     try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(manager.broadcast(json.dumps({"type": "detect", "results": out_results})))
+        await manager.broadcast(json.dumps({"type": "detect", "results": out_results}))
     except Exception:
         pass
         
