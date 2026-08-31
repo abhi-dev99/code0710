@@ -1,79 +1,128 @@
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @theme {
-  --font-sans: 'Inter', sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
 body {
-  background-color: #030712;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.15) 0, transparent 50%), 
-    radial-gradient(at 100% 0%, rgba(88, 28, 135, 0.1) 0, transparent 50%),
-    radial-gradient(at 50% 100%, rgba(15, 23, 42, 0.5) 0, transparent 50%);
-  background-attachment: fixed;
-  color: #f8fafc;
-  font-family: 'Inter', sans-serif;
+  background-color: #000000;
+  color: #E5E5E5;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Minimal Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
-  border-radius: 4px;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.5);
+  background: #262626; /* neutral-800 */
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 0.8);
+  background: #404040; /* neutral-700 */
 }
 
-.glass-panel {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+/* Core Component Classes for Apple/Uber aesthetic */
+.panel {
+  background: #0A0A0A; /* neutral-950 */
+  border: 1px solid #171717; /* neutral-900 */
+  border-radius: 12px;
 }
 
-.glass-panel-light {
-  background: rgba(30, 41, 59, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.panel-elevated {
+  background: #0F0F0F;
+  border: 1px solid #262626; /* neutral-800 */
+  border-radius: 16px;
+  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.8);
 }
 
-.text-gradient-blue {
-  background: linear-gradient(to right, #38bdf8, #818cf8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.btn-primary {
+  background: #FFFFFF;
+  color: #000000;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: opacity 0.2s;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.glow-border {
-  position: relative;
+.btn-secondary {
+  background: #171717;
+  color: #FFFFFF;
+  font-weight: 500;
+  border: 1px solid #262626;
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: background 0.2s;
 }
-.glow-border::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(to right, rgba(56, 189, 248, 0.5), rgba(129, 140, 248, 0.1));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
+.btn-secondary:hover:not(:disabled) {
+  background: #262626;
+}
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-@keyframes fade-slide-up {
-  0% { opacity: 0; transform: translateY(10px); }
+.tab-active {
+  color: #FFFFFF;
+  border-bottom: 2px solid #FFFFFF;
+}
+.tab-inactive {
+  color: #737373; /* neutral-500 */
+}
+.tab-inactive:hover {
+  color: #A3A3A3; /* neutral-400 */
+}
+
+/* Table styling */
+th {
+  text-align: left;
+  font-weight: 500;
+  color: #737373;
+  border-bottom: 1px solid #171717;
+  padding: 12px 16px;
+}
+td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #0F0F0F;
+}
+tr:hover td {
+  background: #0A0A0A;
+}
+
+/* Form inputs */
+input, select {
+  background: #171717;
+  border: 1px solid #262626;
+  color: #FFFFFF;
+  border-radius: 6px;
+  padding: 8px 12px;
+  outline: none;
+}
+input:focus, select:focus {
+  border-color: #525252;
+}
+
+/* Animations */
+@keyframes slide-down {
+  0% { opacity: 0; transform: translateY(-10px); }
   100% { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-slide {
-  animation: fade-slide-up 0.3s ease-out forwards;
+.animate-slide-down {
+  animation: slide-down 0.2s ease-out forwards;
 }
