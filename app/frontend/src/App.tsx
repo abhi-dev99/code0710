@@ -154,7 +154,7 @@ export default function App() {
         {activeTab === 'feed' && (
           <div className="panel-elevated flex-1 overflow-hidden flex flex-col">
             <div className="p-5 border-b border-[#171717] flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-white">High-Risk Anomaly Ledger (Score > 0.8)</h2>
+              <h2 className="text-lg font-semibold text-white">High-Risk Anomaly Ledger (Score &gt; 0.8)</h2>
               <span className="text-xs text-[#737373] font-mono">{anomalies.length} items in queue</span>
             </div>
             <div className="flex-1 overflow-auto">
