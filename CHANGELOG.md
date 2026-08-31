@@ -502,3 +502,7 @@ Name-selection process:
 ### Micro-commit 127 — docs polish 127
 - fix: docs/assets sync 127
 
+
+### Micro-commit 128 — docs polish 128
+- fix: docs/assets sync 128
+
