@@ -690,3 +690,7 @@ Name-selection process:
 ### Micro-commit 174 — docs polish 174
 - fix: docs/assets sync 174
 
+
+### Micro-commit 175 — docs polish 175
+- fix: docs/assets sync 175
+
