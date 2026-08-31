@@ -58,7 +58,7 @@ export default function App() {
               return next;
             });
             
-            const newAnomalies = data.results.filter((r: any) => r.fused_Score &gt; 0.8);
+            const newAnomalies = data.results.filter((r: any) => r.fused_score > 0.8);
             if (newAnomalies.length > 0) {
               setAnomalies(prev => [...newAnomalies, ...prev].slice(0, 20));
             }
