@@ -478,3 +478,7 @@ Name-selection process:
 ### Micro-commit 121 — docs polish 121
 - fix: docs/assets sync 121
 
+
+### Micro-commit 122 — docs polish 122
+- fix: docs/assets sync 122
+
