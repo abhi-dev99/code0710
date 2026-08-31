@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -121,6 +121,11 @@ class TournamentRequest(BaseModel):
     use_llm: bool = Field(default=False)
     squad_size: int = Field(default=10, ge=2, le=32)
     generations: int = Field(default=2, ge=1, le=5)
+
+@app.get("/")
+def index():
+    # Redirect root to the Vite dev server for the React UI
+    return RedirectResponse(url="http://localhost:5173")
 
 @app.get("/api/health")
 def health() -> dict:
