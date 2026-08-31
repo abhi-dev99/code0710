@@ -610,3 +610,7 @@ Name-selection process:
 ### Micro-commit 154 — docs polish 154
 - fix: docs/assets sync 154
 
+
+### Micro-commit 155 — docs polish 155
+- fix: docs/assets sync 155
+
