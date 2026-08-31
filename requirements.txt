@@ -24,3 +24,4 @@ uvicorn[standard]>=0.29
 
 # Data acquisition
 kagglehub>=0.2
+anyio>=4.0
