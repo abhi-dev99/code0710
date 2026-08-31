@@ -386,3 +386,7 @@ Name-selection process:
 ### Micro-commit 98 — docs polish 98
 - fix: docs/assets sync 98
 
+
+### Micro-commit 99 — docs polish 99
+- fix: docs/assets sync 99
+
