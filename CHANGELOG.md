@@ -230,3 +230,7 @@ Name-selection process:
 - [ ] Create GitHub repo `code0710`, push scaffold
 - [ ] Download datasets, hash + lock splits
 - [ ] Build `llm_client.py` + smoke test against OpenRouter
+
+### Micro-commit 60 — docs polish 60
+- fix: docs/assets sync 60
+
