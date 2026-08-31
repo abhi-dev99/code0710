@@ -814,3 +814,7 @@ Name-selection process:
 ### Micro-commit 205 — docs polish 205
 - fix: docs/assets sync 205
 
+
+### Micro-commit 206 — docs polish 206
+- fix: docs/assets sync 206
+
