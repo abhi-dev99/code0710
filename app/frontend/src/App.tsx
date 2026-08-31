@@ -49,7 +49,7 @@ export default function App() {
             
             // Bucket for distribution & anomalies
             setDistribution(prev => {
-              const next = [...prev];
+              const next = prev.map(b => ({...b}));
               data.results.forEach((res: any) => {
                 const idx = Math.min(Math.floor(res.fused_score * 10), 9);
                 if (res.flagged) next[idx].fraud += 1;
@@ -138,15 +138,18 @@ export default function App() {
           { id: 'feed', label: 'Anomaly Ledger', icon: Activity },
           { id: 'analytics', label: 'Model Observability', icon: BarChart2 },
           { id: 'simulation', label: 'Tactical Controls', icon: Crosshair }
-        ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id as any)}
-            className={`pb-3 flex items-center gap-2 font-medium text-sm transition-colors ${activeTab === t.id ? 'tab-active' : 'tab-inactive'}`}
-          >
-            <t.icon size={16} /> {t.label}
-          </button>
-        ))}
+        ].map(t => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id as any)}
+              className={`pb-3 flex items-center gap-2 font-medium text-sm transition-colors ${activeTab === t.id ? 'tab-active' : 'tab-inactive'}`}
+            >
+              <Icon size={16} /> {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Main Content Area */}
@@ -154,7 +157,7 @@ export default function App() {
         {activeTab === 'feed' && (
           <div className="panel-elevated flex-1 overflow-hidden flex flex-col">
             <div className="p-5 border-b border-[#171717] flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-white">High-Risk Anomaly Ledger (Score &gt; 0.8)</h2>
+              <h2 className="text-lg font-semibold text-white">High-Risk Anomaly Ledger (Score > 0.8)</h2>
               <span className="text-xs text-[#737373] font-mono">{anomalies.length} items in queue</span>
             </div>
             <div className="flex-1 overflow-auto">
