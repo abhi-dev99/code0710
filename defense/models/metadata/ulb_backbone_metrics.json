@@ -4,12 +4,18 @@
   "n_test": 56962,
   "fraud_rate_train": 0.001729,
   "fraud_rate_test": 0.00172,
-  "roc_auc": 0.985,
-  "average_precision": 0.8752,
-  "trained_at": "2026-08-25T21:11:41.776503+00:00",
+  "roc_auc": 0.9852,
+  "average_precision": 0.875,
+  "capture_clock_ablation": {
+    "note": "Time (seconds since ULB's capture start) excluded from the shipped model -- no live-scoring equivalent exists. Reported for transparency, identical recipe/split/seed, only Time differs.",
+    "roc_auc_with_time": 0.985,
+    "average_precision_with_time": 0.8752,
+    "roc_auc_without_time": 0.9852,
+    "average_precision_without_time": 0.875
+  },
+  "trained_at": "2026-09-01T12:52:09.451679+00:00",
   "seed": 710,
   "features": [
-    "Time",
     "V1",
     "V2",
     "V3",
@@ -51,5 +57,5 @@
     "tree_method": "hist",
     "random_state": 710
   },
-  "honesty_note": "Native real features, committed split, no synthetic data involved. This is the real-world credibility metric. Trained with the same determinism pin as the arena ensemble (K1); the fitted model is persisted alongside these metrics."
+  "honesty_note": "Native real features (Time excluded, see capture_clock_ablation), committed split, no synthetic data involved. This is the real-world credibility metric. Trained with the same determinism pin as the arena ensemble (K1); the fitted model is persisted alongside these metrics."
 }
