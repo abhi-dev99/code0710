@@ -25,16 +25,23 @@ Mastercard Innovation Challenge 2026 — AI Defense Lab for Payment Security · 
 
 ## Why LiveFire exists
 
-Static fraud models lose to adaptive attackers. LiveFire closes the loop: an **LLM red team proposes statistical generator parameters** → a **deterministic weaver compiles them into rail-realistic transactions** → a **heterogeneous blue ensemble detects + disagrees → novelty-flags** → **SHAP explains what got caught** → that intelligence **mutates the next attack generation**. Same vectors replayed across four global rail profiles for a per-rail survival comparison — the one axis none of the reference architectures we benchmarked against attempt.
+Static fraud models lose to adaptive attackers. LiveFire closes the loop:
+
+- An **LLM red team** proposes statistical generator parameters
+- A **deterministic weaver** compiles them into rail-realistic transactions
+- A **heterogeneous blue ensemble** detects, disagrees, and novelty-flags
+- **SHAP** explains what got caught
+- That intelligence **mutates the next attack generation**
+- The same vectors replay across **four global rail profiles** for a per-rail survival comparison — the one axis none of the reference architectures we benchmarked against attempt
 
 | Usual failure | What LiveFire does instead |
 |---|---|
-| Metrics trained and tested on its own simulator | **Two numbers, never mixed.** Real credibility = XGB on real ULB holdout (ROC-AUC 0.9852 / AP 0.8750). Arena = synthetic-attack detection vs real-anchored benign. |
-| Single model, single threshold, inflated detection rate | **Heterogeneous blue**: XGB (explainable) + LR + deterministic rules + IF (benign-only). Threshold calibrated on a **held-out benign slice** at a 0.5% FP target. |
-| "98% detection" at an unstated false-positive rate | **Honest operating point.** Every run reports its own *measured* detection + *realized* FP next to the 0.5% target. Ranges across seeds, not cherry-picked points. |
-| LLM writes fraudulent transactions directly | **LLM buys the plan, the Weaver builds the transactions.** The LLM only outputs statistical parameters; a seeded CPU compiler expands them through a 6-check constraint engine per rail. |
-| One geography, one rail | **Four rail profiles** — `card_intl` / `eu_psd2` / `us_cnp` / `upi_in` — same vectors, per-rail survival in one ledger. |
-| A "prompt-injection detector" that's a keyword match | **Category D is a structural check.** `beneficiary_mismatch` compares the payment mandate's stated payee against where settlement actually lands — the same account-reference-binding principle real agentic-payment protocols use. |
+| Metrics trained and tested on its own simulator | <ul><li>**Two numbers, never mixed**</li><li>Real credibility = XGB on real ULB holdout (ROC-AUC 0.9852 / AP 0.8750)</li><li>Arena = synthetic-attack detection vs real-anchored benign</li></ul> |
+| Single model, single threshold, inflated detection rate | <ul><li>**Heterogeneous blue**: XGB (explainable) + LR + deterministic rules + IF (benign-only)</li><li>Threshold calibrated on a **held-out benign slice** at a 0.5% FP target</li></ul> |
+| "98% detection" at an unstated false-positive rate | <ul><li>**Honest operating point** — every run reports its own</li><li>*measured* detection + *realized* FP next to the 0.5% target</li><li>Ranges across seeds, not cherry-picked points</li></ul> |
+| LLM writes fraudulent transactions directly | <ul><li>**LLM buys the plan**, the Weaver builds the transactions</li><li>LLM only outputs statistical parameters</li><li>A seeded CPU compiler expands them through a 6-check constraint engine per rail</li></ul> |
+| One geography, one rail | <ul><li>**Four rail profiles** — `card_intl` / `eu_psd2` / `us_cnp` / `upi_in`</li><li>Same vectors, per-rail survival in one ledger</li></ul> |
+| A "prompt-injection detector" that's a keyword match | <ul><li>**Category D is a structural check**</li><li>`beneficiary_mismatch` compares the mandate's stated payee against where settlement actually lands</li><li>Same account-reference-binding principle real agentic-payment protocols use</li></ul> |
 
 ## Screenshots
 
@@ -49,25 +56,51 @@ Both surfaces talk to the same live API and the same running ensemble — the te
 
 ## Quick Start
 
+**1. Create the environment and install dependencies**
 ```bash
 python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements.txt
-copy config\settings.example.env .env   # fill LLM_API_KEY for live red-team generation; product runs without it
-
-# 1 — real-data anchor (separate from arena, no synthetic)
-python defense\train_real_backbone.py        # → defense/models/artifacts/ulb_backbone.joblib
-
-# 2 — full test suite, zero LLM, deterministic
-python tests\test_e2e.py                    # 6/6
-
-# 3 — the API + dashboard
-uvicorn app.api:app --port 8000             # http://localhost:8000  (or: docker compose up --build)
-
-# 4 — the terminal UI (optional second surface; talks to the same API on :8000)
-cd app\frontend && npm install && npm run dev   # http://localhost:3000
 ```
 
-`POST /api/round` runs one closed loop. `POST /api/tournament` runs population red-teaming. `POST /api/detect` scores your own transactions. `GET /api/ledger/export` downloads the ledger.
+**2. Configure the LLM (optional — the product runs without it, templates fill in)**
+```bash
+copy config\settings.example.env .env
+```
+
+**3. Anchor to real data** — separate from the arena, no synthetic data involved
+```bash
+python defense\train_real_backbone.py
+```
+→ writes `defense/models/artifacts/ulb_backbone.joblib`
+
+**4. Run the test suite** — zero LLM calls, fully deterministic
+```bash
+python tests\test_e2e.py
+```
+→ 6/6 passing
+
+**5. Start the API + dashboard**
+```bash
+uvicorn app.api:app --port 8000
+```
+→ http://localhost:8000 (or: `docker compose up --build`)
+
+**6. Start the terminal UI** — optional second surface, talks to the same API on `:8000`
+```bash
+cd app\frontend
+npm install
+npm run dev
+```
+→ http://localhost:3000
+
+**Key endpoints once the API is running:**
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/round` | Runs one closed loop (red → weave → blue → explain → ledger) |
+| `POST /api/tournament` | Runs population red-teaming (squad vs. blue, multi-generation) |
+| `POST /api/detect` | Scores your own transactions with the live ensemble |
+| `GET /api/ledger/export` | Downloads the full Robustness Ledger as CSV |
 
 ## Architecture
 
@@ -82,22 +115,41 @@ MUTATE    memory + SHAP context fed into next red prompt → co-evolution
 LEDGER    every campaign + round persisted; multi-rail replay; CSV export
 ```
 
-**Red:** an ox-alpha-lineage model via `attacks/redagent/core/llm_client.py` — tiered routing, failover chains on both `429` (rate limit) and `404` (a retired/renamed model slug — OpenRouter's free/preview tier churns these; the whole point of a chain is to survive exactly that), fence-strip, shared `AsyncClient` scoped correctly per event loop.
+**Red** — an ox-alpha-lineage model via `attacks/redagent/core/llm_client.py`:
+- Tiered routing across a model chain
+- Failover on both `429` (rate limit) and `404` (a retired/renamed model slug — OpenRouter's free/preview tier churns these; the whole point of a chain is to survive exactly that)
+- Fence-strip on raw model output
+- Shared `AsyncClient` scoped correctly per event loop
 
-**Weaver:** `weave_attack_plan()` validates → entity pools → amount ladder + jitter → inter-arrivals → tz-aware timestamps → per-txn constraint engine (C1-C6) × rail profile. Seeded → reproducible.
+**Weaver** — `weave_attack_plan()`:
+- Validates the plan → entity pools → amount ladder + jitter → inter-arrivals → tz-aware timestamps
+- Per-txn constraint engine (C1-C6) × rail profile
+- Seeded end to end → fully reproducible
 
-**Blue:** `defense/features/arena_features.py` → 17 dims: behavioral, velocity (causal 1h), graph (causal fan-out), `memo_injection_score` (text-pattern tier) + `beneficiary_mismatch` (structural tier, Category D). `defense/models/backbone.py` fusion `0.50/0.20/0.20/0.10`; disagreement → `novelty_flag`; `beneficiary_mismatch` also fires as a hard, fully-auditable rule — a mandate/settlement mismatch is fraud by construction, not a probabilistic call.
+**Blue** — `defense/features/arena_features.py` → 17 dims:
+- Behavioral, velocity (causal 1h), graph (causal fan-out)
+- `memo_injection_score` (text-pattern tier) + `beneficiary_mismatch` (structural tier, Category D)
+- `defense/models/backbone.py` fuses XGB/LR/Rules/IF at `0.50/0.20/0.20/0.10`; disagreement → `novelty_flag`
+- `beneficiary_mismatch` also fires as a hard, fully-auditable rule — a mandate/settlement mismatch is fraud by construction, not a probabilistic call
 
-**Memory & Ledger:** `strategy_memory.py` (SQLite, WAL mode, foreign keys enforced) — campaigns + rounds, vector report cards, mutation context. `run_tournament()` fields squad_size × vectors × generations.
+**Memory & Ledger** — `strategy_memory.py`:
+- SQLite, WAL mode, foreign keys enforced
+- Campaigns + rounds, vector report cards, mutation context
+- `run_tournament()` fields squad_size × vectors × generations
 
-**Tech stack:** Python 3.12 · XGBoost + sklearn · SHAP · FastAPI · SQLite (env-configurable path; Postgres is a documented path-to-production step, not a present-tense claim) · React/Vite/Tailwind terminal UI · httpx · Docker
+**Tech stack:**
+- Python 3.12 · XGBoost + sklearn · SHAP · FastAPI
+- SQLite (env-configurable path; Postgres is a documented path-to-production step, not a present-tense claim)
+- React/Vite/Tailwind terminal UI · httpx · Docker
 
 ## Honest Numbers — read before you quote
 
-**Real backbone (no synthetic):** `defense/models/metadata/ulb_backbone_metrics.json` — ULB corpus, committed split `SEED=710`, `n_jobs=1` deterministic:
-**ROC-AUC 0.9852 / AP 0.8750** (n_train 227,845, n_test 56,962)
-
-This number **excludes** ULB's `Time` column on purpose — seconds-since-capture-start is a dataset artifact with no live-scoring equivalent, and including it is a training/serving skew we specifically checked for (see `capture_clock_ablation` in the committed metrics file: with it, 0.9850/0.8752; without it, 0.9852/0.8750 — the headline number was never meaningfully inflated by it, and now that's a committed, reproducible fact instead of an assumption).
+**Real backbone (no synthetic):** `defense/models/metadata/ulb_backbone_metrics.json`
+- ULB corpus, committed split `SEED=710`, `n_jobs=1` deterministic
+- **ROC-AUC 0.9852 / AP 0.8750** (n_train 227,845, n_test 56,962)
+- **Excludes ULB's `Time` column on purpose** — seconds-since-capture-start is a dataset artifact with no live-scoring equivalent
+- Checked for this exact training/serving skew (`capture_clock_ablation` in the committed metrics file): with it, 0.9850/0.8752; without it, 0.9852/0.8750
+- The headline number was never meaningfully inflated by it — now a committed, reproducible fact, not an assumption
 
 **Arena (synthetic attacks vs real-anchored benign, cross-vector holdout):**
 * Canonical 4-vector round (card_intl, A1/B1/C1/D1): **~70% held-out detection @ ~0.53% realized FP** (target 0.5%)
@@ -110,26 +162,56 @@ We also report `pr_auc` and `recall@FPR≤0.001` with **realized** (not nominal)
 
 Named checkpoints, not a vague "we integrate with Mastercard" line:
 
-* **Agent Pay for Machines (AP4M)**, Mastercard's June 2026 agentic-payments framework, runs four sequential functions: *credentialing* a registered agent → *permissioning* what it can spend → *transacting* across card/account rails → *settling*. LiveFire's rail-profile constraint engine occupies the **permissioning** checkpoint (per-channel caps, category rules, SCA step-up); the blue ensemble occupies the risk-scoring step inside **transacting**.
-* The wire format at that checkpoint is **ISO 8583**: an authorization request is MTI `0100` (acquirer → issuer), the response is `0110`. LiveFire's fused score is designed to attach to that `0110` response, not to invent a new message format.
-* Mastercard's own inline scorer, **Decision Intelligence Pro**, runs real-time ML in the authorization path at roughly 50ms, over 500+ data points per transaction, with network-level intelligence across billions of transactions. LiveFire's BlueEnsemble occupies the **same architectural slot** — inline, pre-decision scoring — at hackathon scale (17 features, single process). We are not claiming scale parity; we are claiming the same slot in the pipeline, honestly sized.
-* Mastercard's real fraud/identity/AML stack includes acquisitions directly adjacent to this project's categories: **Ekata** (digital identity verification — Category A), **Ethoca** (post-authorization dispute/chargeback collaboration), and **CipherTrace** (crypto/blockchain AML — relevant since AP4M settles partly on-chain). LiveFire's rail-profile design is the seam where a real deployment would plug into each.
+**Agent Pay for Machines (AP4M)** — Mastercard's June 2026 agentic-payments framework:
+- Four sequential functions: *credentialing* a registered agent → *permissioning* what it can spend → *transacting* across card/account rails → *settling*
+- LiveFire's rail-profile constraint engine occupies the **permissioning** checkpoint (per-channel caps, category rules, SCA step-up)
+- LiveFire's blue ensemble occupies the risk-scoring step inside **transacting**
+
+**The wire format** at that checkpoint is **ISO 8583**:
+- Authorization request = MTI `0100` (acquirer → issuer)
+- Response = MTI `0110`
+- LiveFire's fused score is designed to attach to that `0110` response, not invent a new message format
+
+**Decision Intelligence Pro** — Mastercard's own inline scorer:
+- Real-time ML in the authorization path, ~50ms, 500+ data points per transaction
+- Network-level intelligence across billions of transactions
+- LiveFire's BlueEnsemble occupies the **same architectural slot** — inline, pre-decision scoring — at hackathon scale (17 features, single process)
+- Not claiming scale parity — claiming the same slot in the pipeline, honestly sized
+
+**Adjacent real acquisitions** in Mastercard's fraud/identity/AML stack:
+- **Ekata** — digital identity verification (maps to Category A)
+- **Ethoca** — post-authorization dispute/chargeback collaboration
+- **CipherTrace** — crypto/blockchain AML (relevant since AP4M settles partly on-chain)
+- LiveFire's rail-profile design is the seam where a real deployment would plug into each
 
 ## 14 vectors, 4 rails — honestly scoped
 
-`attacks/taxonomy.json` v1.0 — 14 vectors across 5 categories: identity (A1-A3), social (B1-B3), evasion (C1-C3), **agentic (D1-D3)**, poisoning (E1-E2). Shipped detection covers all 14, including a real structural signal for D1-D3 (see above) — not shipped as a text-pattern stand-in for a semantic tier.
+`attacks/taxonomy.json` v1.0:
+- 14 vectors across 5 categories: identity (A1-A3), social (B1-B3), evasion (C1-C3), **agentic (D1-D3)**, poisoning (E1-E2)
+- Shipped detection covers all 14, including a real structural signal for D1-D3 — not a text-pattern stand-in for a semantic tier
+- Rails: `card_intl` (global), `eu_psd2` (PSD2 SCA), `us_cnp` (no SCA), `upi_in` (NPCI-calibrated)
 
-Rails: `card_intl` (global), `eu_psd2` (PSD2 SCA), `us_cnp` (no SCA), `upi_in` (NPCI-calibrated).
-
-Actively researched but not yet wired into generation/detection (tracked, not padded into the taxonomy count): merchant-mandate forgery (a merchant fabricates a signed mandate the user never approved — distinct from D1's poisoned-invoice mechanism), and indirect prompt injection via product-listing content rather than a tool call. Both are grounded in current (2026) AP2 red-teaming literature, not speculative.
+Tracked research, not yet wired into generation/detection (not padded into the taxonomy count):
+- Merchant-mandate forgery — a merchant fabricates a signed mandate the user never approved, distinct from D1's poisoned-invoice mechanism
+- Indirect prompt injection via product-listing content rather than a tool call
+- Both grounded in current (2026) AP2 red-teaming literature, not speculative
 
 ## Evidence & Reproducibility
 
-**Evidence committed:** `defense/models/metadata/ulb_backbone_metrics.json` (now with the capture-clock ablation), `evidence/breakthrough_report_seed71*.json`, `evidence/live_tournament_3gen_seed909.json`, `CHANGELOG.md`, `docs/AUDIT.md`
+**Evidence committed:**
+- `defense/models/metadata/ulb_backbone_metrics.json` (now with the capture-clock ablation)
+- `evidence/breakthrough_report_seed71*.json`, `evidence/live_tournament_3gen_seed909.json`
+- `CHANGELOG.md`, `docs/AUDIT.md`
 
-**Reproducibility:** every weave seeded, every split `SEED=710`, XGB `n_jobs=1` pinned, `tests/calib_sweep.py` reproduces the calibration table, `tests/test_e2e.py` is 6/6 green with zero LLM calls.
+**Reproducibility:**
+- Every weave seeded, every split `SEED=710`, XGB `n_jobs=1` pinned
+- `tests/calib_sweep.py` reproduces the calibration table
+- `tests/test_e2e.py` is 6/6 green with zero LLM calls
 
-**Path to production:** `Dockerfile` + `docker-compose.yml`, `BlueEnsemble.save/load`, `/api/health` p50/p99, `LEDGER_DB_URL` as the seam a managed Postgres (e.g. Neon) would attach to for durable multi-instance ledger storage — not yet wired, listed here as a next step rather than claimed as shipped. Real gaps documented honestly.
+**Path to production:**
+- `Dockerfile` + `docker-compose.yml`, `BlueEnsemble.save/load`, `/api/health` p50/p99
+- `LEDGER_DB_URL` as the seam a managed Postgres (e.g. Neon) would attach to for durable multi-instance ledger storage
+- Not yet wired — listed here as a next step, not claimed as shipped. Real gaps documented honestly.
 
 Verify it yourself:
 ```bash
