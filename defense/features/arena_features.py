@@ -1,12 +1,15 @@
 """
 Arena Feature Extractor — turns arena transactions into a feature matrix.
 
-Three feature families (heterogeneous ensemble input):
+Four feature families (heterogeneous ensemble input):
   1. Behavioral: amount, cyclical hour, night flag, distance, channel one-hots,
      amount-vs-user-median ratio
   2. Velocity (windowed per user/device): counts, sums, distinct merchants
   3. Graph (entity graph, networkx): device shared-user count, merchant
      unique-user count, user-merchant pair repeat count
+  4. Category D (agentic): memo_injection_score (text-pattern tier) and
+     beneficiary_mismatch (structural tier -- mandate payee vs settlement
+     payee, a deterministic account-reference-binding check)
 
 Deterministic, no LLM. Fit-free (stateless given the full stream) — features
 for a campaign are computed on the campaign+context stream so velocity windows
