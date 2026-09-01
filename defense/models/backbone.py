@@ -55,6 +55,10 @@ class RulesDetector:
             | ((X[:, self.idx["is_night"]] > 0) & (X[:, self.idx["amount"]] > RULE_NIGHT_AMOUNT))
             | (X[:, self.idx["distance_km"]] > RULE_DISTANCE)
         )
+        # account-reference binding: settlement payee != mandate payee is
+        # fraud by construction (Category D), no probabilistic judgment needed
+        if "beneficiary_mismatch" in self.idx:
+            hits = hits | (X[:, self.idx["beneficiary_mismatch"]] > 0)
         return hits.astype(int)
 
 

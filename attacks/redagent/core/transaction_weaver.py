@@ -186,11 +186,19 @@ def weave_attack_plan(
             straight = _haversine_km(prev["lat"], prev["lon"], lat, lon)
             # Use actual straight-line distance; let constraint engine validate physics
             dist_km = round(straight, 2)
+        merchant_id = str(rng.choice(merchants))
+        if plan.get("memo_injection") and len(merchants) > 1:
+            # the agent's mandate names a legitimate payee; the injected memo
+            # redirects settlement elsewhere -> the mismatch IS the fraud
+            mandate_merchant_id = str(rng.choice([m for m in merchants if m != merchant_id]))
+        else:
+            mandate_merchant_id = merchant_id
         txn = {
             "txn_id": f"{campaign_id}_t{len(txns):06d}",
             "user_id": u,
             "device_id": str(rng.choice(devices)),
-            "merchant_id": str(rng.choice(merchants)),
+            "merchant_id": merchant_id,
+            "mandate_merchant_id": mandate_merchant_id,
             "merchant_category": str(rng.choice(plan["merchant_categories"])),
             "channel": ch.name,
             "amount": round(amt, 2),
@@ -313,11 +321,13 @@ def generate_benign(
             dt_h = (t - prev["timestamp"]).total_seconds() / 3600.0
             straight = _haversine_km(prev["lat"], prev["lon"], lat, lon)
             dist_km = round(min(straight, max(dt_h, 0.02) * 900.0), 2)
+        benign_merchant_id = f"m_{int(rng.integers(1, 500))}"
         txn = {
             "txn_id": f"benign_{p.key}_{attempts:06d}",
             "user_id": uid,
             "device_id": f"benign_dev_{int(rng.integers(1, max(2, n // 4 + 1)))}",
-            "merchant_id": f"m_{int(rng.integers(1, 500))}",
+            "merchant_id": benign_merchant_id,
+            "mandate_merchant_id": benign_merchant_id,
             "merchant_category": str(rng.choice(list(ch.categories))),
             "channel": ch.name,
             "amount": round(amt, 2),

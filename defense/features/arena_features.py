@@ -27,7 +27,7 @@ FEATURE_NAMES = [
     "user_cnt_1h", "user_sum_1h", "user_merchants_1h",
     "device_cnt_1h", "device_users",
     "merchant_users", "user_merchant_repeats",
-    "memo_injection_score",
+    "memo_injection_score", "beneficiary_mismatch",
 ]
 
 # heuristic prompt-injection markers for the memo/invoice text field (P2.4:
@@ -145,6 +145,19 @@ def build_features(txns: list[dict[str, Any]]) -> pd.DataFrame:
         out["memo_injection_score"] = df["memo_text"].map(_memo_score)
     else:
         out["memo_injection_score"] = 0.0
+
+    # structural Category D signal: does the settlement merchant differ from
+    # the payment mandate's stated payee (an injected/hijacked agent redirects
+    # funds; a legitimate one settles where it was told to) -- this is the
+    # deterministic account-reference-binding check a real agentic-payments
+    # rail (e.g. AP2/AP4M) would run, not a text-pattern guess
+    if "mandate_merchant_id" in df.columns:
+        out["beneficiary_mismatch"] = (
+            df["mandate_merchant_id"].notna()
+            & (df["mandate_merchant_id"] != df["merchant_id"])
+        ).astype(float)
+    else:
+        out["beneficiary_mismatch"] = 0.0
 
     out = out[FEATURE_NAMES].astype(float)
     # return in the ORIGINAL stream order (we computed in time order so the
