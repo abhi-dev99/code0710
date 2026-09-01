@@ -64,7 +64,7 @@ td{padding:7px 8px;border-bottom:1px solid var(--line)}
     <div class="checks" id="vectors"></div>
     <label>Benign transactions (real-corpus anchored)</label>
     <input type="number" id="nbenign" value="2400" min="400" max="20000" step="200">
-    <label><input type="checkbox" id="usellm" style="width:auto"> Use ox-alpha planner (uncheck = deterministic templates)</label>
+    <label><input type="checkbox" id="usellm" style="width:auto"> Use LLM planner <span id="llmModelLabel" class="muted"></span> (uncheck = deterministic templates)</label>
     <div class="row2" style="gap:8px">
       <div><label>Red squad size (candidates per vector)</label><input type="number" id="squad" value="10" min="2" max="32"></div>
       <div><label>Generations</label><input type="number" id="gens" value="2" min="1" max="5"></div>
@@ -78,6 +78,28 @@ td{padding:7px 8px;border-bottom:1px solid var(--line)}
   <div class="panel">
     <h2>Real-Data Credibility (ULB holdout, honest)</h2>
     <div id="realMetrics" class="muted">loading…</div>
+  </div>
+  <div class="panel">
+    <h2>LLM Provider &amp; API Key <span class="muted" id="llmStatus"></span></h2>
+    <div class="muted" style="margin-bottom:8px">Bring your own key — any OpenAI-compatible endpoint. Nothing is written to disk; it lives in the server process only, and is never echoed back.</div>
+    <label>Base URL</label>
+    <input type="text" id="llmBaseUrl" value="https://openrouter.ai/api/v1">
+    <label>API key</label>
+    <input type="password" id="llmApiKey" placeholder="sk-or-...">
+    <div class="row2" style="gap:8px">
+      <div><label>Model (strategy — planning)</label><input type="text" id="llmModelStrategy" value="google/gemini-3-flash-preview"></div>
+      <div><label>Model (bulk — optional)</label><input type="text" id="llmModelBulk" placeholder="defaults to strategy model"></div>
+    </div>
+    <label>Reasoning effort</label>
+    <select id="llmEffort">
+      <option value="max" selected>max</option>
+      <option value="high">high</option>
+      <option value="medium">medium</option>
+      <option value="low">low</option>
+      <option value="minimal">minimal</option>
+    </select>
+    <button class="ghost" onclick="saveLlmConfig()">🔌 Test &amp; Save Provider</button>
+    <div id="llmConfigOut" class="muted" style="margin-top:8px"></div>
   </div>
 </div>
 
@@ -122,8 +144,38 @@ async function init(){
     c.textContent=v.id+" "+v.name;c.onclick=()=>c.classList.toggle("on");vc.appendChild(c);
   });
   document.getElementById("health").textContent = `online ◆ ${h.vectors} vectors ◆ ${h.ledger_campaigns} campaigns`;
+  renderLlmStatus(h);
   loadReal(); loadLedger(); loadRounds();
   document.getElementById("detectInput").value = JSON.stringify(SAMPLE_TXNS,null,1);
+}
+function renderLlmStatus(h){
+  const label=document.getElementById("llmModelLabel"), status=document.getElementById("llmStatus");
+  if(h.llm_configured && h.llm_info){
+    const m=h.llm_info.models.strategy.split(",")[0].trim();
+    label.textContent=`[${m}]`;
+    status.textContent=`configured · ${h.llm_info.base_url}`;
+  } else {
+    label.textContent="[not configured]";
+    status.textContent="not configured — set a key below";
+  }
+}
+async function saveLlmConfig(){
+  const out=document.getElementById("llmConfigOut");
+  out.innerHTML='<span class="muted">testing…</span>';
+  const body={
+    base_url:document.getElementById("llmBaseUrl").value,
+    api_key:document.getElementById("llmApiKey").value,
+    model_strategy:document.getElementById("llmModelStrategy").value,
+    model_bulk:document.getElementById("llmModelBulk").value||null,
+    reasoning_effort:document.getElementById("llmEffort").value,
+  };
+  try{
+    const j=await post("/api/llm-config",body);
+    out.innerHTML=`<span class="g">✓ live-tested and saved</span> — strategy=${j.models.strategy.split(",")[0].trim()}`;
+    document.getElementById("llmApiKey").value="";
+    const h=await fetch("/api/health").then(r=>r.json());
+    renderLlmStatus(h);
+  }catch(e){out.innerHTML=`<span class="r">✗ ${e.message}</span>`;}
 }
 async function loadReal(){
   try{const m=await fetch("/api/real-metrics").then(r=>r.json());
@@ -241,7 +293,7 @@ function renderRound(s){
     <div class="metric"><div class="v b">${o.recall}</div><div class="k">recall</div></div>
     <div class="metric"><div class="v">${o.f1}</div><div class="k">F1</div></div>
   </div>`;
-  const rows=s.vectors.map(v=>`<tr><td>${v.id}</td><td>${v.vector}${v.held_out?' <span class="a">★ held-out</span>':''}</td><td>${v.llm_generated?'🧠 ox-alpha':'⚙ template'}</td><td>${v.n_txns}</td><td class="${v.detection_rate>0.5?'g':v.detection_rate>0.2?'a':'r'}">${fmtPct(v.detection_rate)}</td><td>${v.in_sample?'in-sample':'held-out'}</td></tr>`).join("");
+  const rows=s.vectors.map(v=>`<tr><td>${v.id}</td><td>${v.vector}${v.held_out?' <span class="a">★ held-out</span>':''}</td><td>${v.llm_generated?'🧠 LLM':'⚙ template'}</td><td>${v.n_txns}</td><td class="${v.detection_rate>0.5?'g':v.detection_rate>0.2?'a':'r'}">${fmtPct(v.detection_rate)}</td><td>${v.in_sample?'in-sample':'held-out'}</td></tr>`).join("");
   document.getElementById("results").innerHTML = cards+
     `<table><tr><th>ID</th><th>Vector</th><th>Planner</th><th>Txns</th><th>Det rate</th><th>Eval</th></tr>${rows}</table>`+
     `<div class="why"><b>Why caught (SHAP):</b> ${s.shap_why}</div>`+

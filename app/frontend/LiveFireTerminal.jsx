@@ -26,6 +26,15 @@ export default function LiveFire() {
     { txn_id: 'demo-attack', user_id: 'u_burst', device_id: 'dev_shared_x', merchant_id: 'm_electronics', channel: 'card_not_present', amount: 4980, timestamp: new Date().toISOString(), location_distance_km: 1450 },
   ], null, 1));
   const [detectOut, setDetectOut] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [llmBaseUrl, setLlmBaseUrl] = useState('https://openrouter.ai/api/v1');
+  const [llmApiKey, setLlmApiKey] = useState('');
+  const [llmModel, setLlmModel] = useState('google/gemini-3-flash-preview');
+  const [llmOut, setLlmOut] = useState(null);
+  const [screen, setScreen] = useState('blotter'); // 'blotter' | 'taxonomy' | 'rails' | 'multirail'
+  const [multiRail, setMultiRail] = useState(null);
+  const [multiRailBusy, setMultiRailBusy] = useState(false);
+  const [profiles, setProfiles] = useState({});
   const inputRef = useRef(null);
 
   // clock
@@ -36,16 +45,18 @@ export default function LiveFire() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [h, l, r, v] = await Promise.all([
+        const [h, l, r, v, p] = await Promise.all([
           fetch(`${API}/api/health`).then(r => r.json()),
           fetch(`${API}/api/ledger?limit=80`).then(r => r.json()),
           fetch(`${API}/api/rounds?limit=20`).then(r => r.json()),
           fetch(`${API}/api/vectors`).then(r => r.json()),
+          fetch(`${API}/api/profiles`).then(r => r.json()),
         ]);
         setHealth(h);
         setLedger(l.campaigns || []);
         setVStats(l.vector_stats || []);
         setRounds(r.rounds || []);
+        setProfiles(p || {});
         setVectors(v.vectors || []);
         setSelVecs(prev => prev.size ? prev : new Set((v.vectors || []).slice(0, 4).map(x => x.id)));
       } catch {}
@@ -101,18 +112,54 @@ export default function LiveFire() {
     } catch (e) { setDetectOut({ error: e.message }); pushLog(`ERR ${e.message}`); }
   };
 
+  const saveLlm = async () => {
+    setLlmOut({ pending: true });
+    try {
+      const res = await fetch(`${API}/api/llm-config`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_url: llmBaseUrl, api_key: llmApiKey, model_strategy: llmModel }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.detail || 'error');
+      setLlmOut({ ok: true, model: j.models.strategy });
+      setLlmApiKey('');
+      pushLog(`SETTINGS  -  LLM PROVIDER SAVED  -  ${j.models.strategy.split(',')[0].trim()}`);
+    } catch (e) { setLlmOut({ error: e.message }); pushLog(`ERR ${e.message}`); }
+  };
+
+  const runMultiRailScreen = async () => {
+    setMultiRailBusy(true);
+    try {
+      const vids = selVecs.size ? [...selVecs] : null;
+      const res = await fetch(`${API}/api/multi-rail`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rail_profile: 'card_intl', vector_ids: vids, n_benign: Math.min(nBenign, 1500) }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.detail || 'error');
+      setMultiRail(j);
+      pushLog('MULTI-RAIL  -  ALL 4 PROFILES SCORED');
+    } catch (e) { pushLog(`ERR ${e.message}`); }
+    setMultiRailBusy(false);
+  };
+
   const submitCmd = () => {
     const c = cmd.trim().toUpperCase();
     setCmd('');
     if (!c) return;
     pushLog(`> ${c}`);
-    if (c === 'HELP') pushLog('CMDS: RUN | TOUR | CLEAR | EXPORT | DETECT | PROFILE [card_intl|eu_psd2|us_cnp|upi_in] | HELP  -  KEYS: F1 RUN, F2 TOUR, F9 EXPORT, ESC CLEAR');
+    if (c === 'HELP') pushLog('CMDS: RUN|TOUR|CLEAR|EXPORT|DETECT|SETTINGS|TAXONOMY|RAILS|MULTIRAIL|BLOTTER|PROFILE [rail] | KEYS: F1 RUN,F2 TOUR,F3 TAXO,F4 RAILS,F5 MULTI,F9 EXPORT,F10 DETECT,F11 SETTINGS,ESC');
     else if (c === 'RUN' || c === 'RUN <GO>') run('round');
     else if (c === 'TOUR' || c === 'TOUR <GO>') run('tournament');
     else if (c === 'CLEAR') runClear();
     else if (c.startsWith('PROFILE')) { const p=c.split(' ')[1]?.toLowerCase(); if(p) { setProfile(p); pushLog(`PROFILE  -  ${p}`);} }
     else if (c === 'EXPORT') runExport();
     else if (c === 'DETECT') setShowDetect(s => !s);
+    else if (c === 'SETTINGS') setShowSettings(s => !s);
+    else if (c === 'TAXONOMY' || c === 'TAXO') setScreen('taxonomy');
+    else if (c === 'RAILS') setScreen('rails');
+    else if (c === 'MULTIRAIL' || c === 'MULTI') { setScreen('multirail'); if (!multiRail) runMultiRailScreen(); }
+    else if (c === 'BLOTTER') setScreen('blotter');
     else pushLog(`UNKNOWN: ${c}  -  TYPE HELP`);
   };
 
@@ -120,16 +167,28 @@ export default function LiveFire() {
 
   // real keyboard-driven controls, matching the F-key badges shown in the UI
   useEffect(() => {
+    const fkeys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F9', 'F10', 'F11', 'Escape'];
     const onKey = (e) => {
-      if (document.activeElement === inputRef.current && e.key !== 'F1' && e.key !== 'F2' && e.key !== 'F9' && e.key !== 'Escape') return;
+      if (document.activeElement === inputRef.current && !fkeys.includes(e.key)) return;
       if (e.key === 'F1') { e.preventDefault(); run('round'); }
       else if (e.key === 'F2') { e.preventDefault(); run('tournament'); }
+      else if (e.key === 'F3') { e.preventDefault(); setScreen('taxonomy'); }
+      else if (e.key === 'F4') { e.preventDefault(); setScreen('rails'); }
+      else if (e.key === 'F5') { e.preventDefault(); setScreen('multirail'); if (!multiRail) runMultiRailScreen(); }
       else if (e.key === 'F9') { e.preventDefault(); runExport(); }
-      else if (e.key === 'Escape') { e.preventDefault(); showDetect ? setShowDetect(false) : runClear(); }
+      else if (e.key === 'F10') { e.preventDefault(); setShowDetect(s => !s); }
+      else if (e.key === 'F11') { e.preventDefault(); setShowSettings(s => !s); }
+      else if (e.key === 'Escape') {
+        e.preventDefault();
+        if (showSettings) setShowSettings(false);
+        else if (showDetect) setShowDetect(false);
+        else if (screen !== 'blotter') setScreen('blotter');
+        else runClear();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [running, selVecs, squadSize, generations, nBenign, profile, showDetect]);
+  }, [running, selVecs, squadSize, generations, nBenign, profile, showDetect, showSettings, screen, multiRail]);
 
   const cols = useMemo(() => ledger.slice(0, 24), [ledger]);
 
@@ -170,6 +229,38 @@ export default function LiveFire() {
           </div>
         </div>
       )}
+      {showSettings && (
+        <div className="absolute inset-0 z-50 bg-black/80 flex items-start justify-center pt-12" onClick={() => setShowSettings(false)}>
+          <div className="bg-[#0a0a0a] border border-[#FF8C00] w-[520px] max-w-[92vw]" onClick={e => e.stopPropagation()}>
+            <div className="h-[24px] bg-[#FF8C00] text-black px-2 flex items-center justify-between font-black text-[11px] tracking-widest">
+              <span>SETTINGS  -  LLM PROVIDER &amp; API KEY</span>
+              <button onClick={() => setShowSettings(false)} className="px-2 hover:bg-black hover:text-[#FF8C00]">X</button>
+            </div>
+            <div className="p-3 text-[11px]">
+              <div className="text-[#666] mb-2">Bring your own key -- any OpenAI-compatible endpoint. Kept in the server process only, never written to disk or echoed back.</div>
+              <div className="text-[#666] mb-1">CURRENT: {health?.llm_configured ? <span className="text-[#00FF00]">{health.llm_info?.models?.strategy?.split(',')[0].trim()}</span> : <span className="text-red-500">not configured</span>}</div>
+              <label className="block mt-2 text-[#666]">BASE URL</label>
+              <input value={llmBaseUrl} onChange={e=>setLlmBaseUrl(e.target.value)}
+                className="w-full bg-black border border-[#333] text-[#FF8C00] p-1 outline-none font-mono" />
+              <label className="block mt-2 text-[#666]">API KEY</label>
+              <input type="password" value={llmApiKey} onChange={e=>setLlmApiKey(e.target.value)} placeholder="sk-or-..."
+                className="w-full bg-black border border-[#333] text-[#FF8C00] p-1 outline-none font-mono" />
+              <label className="block mt-2 text-[#666]">MODEL (e.g. google/gemini-3-flash-preview, openai/gpt-5, anthropic/claude-5-sonnet)</label>
+              <input value={llmModel} onChange={e=>setLlmModel(e.target.value)}
+                className="w-full bg-black border border-[#333] text-[#FF8C00] p-1 outline-none font-mono" />
+              <button onClick={saveLlm} disabled={!llmApiKey || llmOut?.pending}
+                className="w-full mt-3 bg-[#FF8C00] text-black py-[4px] font-black disabled:opacity-50">
+                {llmOut?.pending ? 'TESTING...' : 'TEST & SAVE  <GO>'}
+              </button>
+              {llmOut && !llmOut.pending && (
+                llmOut.error
+                  ? <div className="mt-2 text-red-500">ERR {llmOut.error}</div>
+                  : <div className="mt-2 text-[#00FF00]">SAVED -- {llmOut.model}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* TOP BAR  -  LiveFire style */}
       <div className="h-[28px] bg-[#FF8C00] text-black flex items-center px-2 gap-3 font-black tracking-widest text-[11px] shrink-0">
         <svg viewBox="0 0 780 230" style={{ height: 20, width: 'auto' }} aria-label="LiveFire">
@@ -188,7 +279,10 @@ export default function LiveFire() {
           <span className={`w-2 h-2 inline-block ${health?.ensemble_ready ? 'bg-black' : 'bg-red-600'}`} style={{ boxShadow: '0 0 4px rgba(0,0,0,0.5)' }} />
           {health?.ensemble_ready ? 'ENS READY' : 'ENS COLD'}
           <span className="bg-black text-[#FF8C00] px-2 ml-2">{profile.toUpperCase()}</span>
-          <span className={`px-2 ${health?.llm_configured ? 'bg-black text-[#FF8C00]' : 'bg-red-600 text-white'}`}>{health?.llm_configured ? 'LLM:OX-ALPHA' : 'LLM:TEMPLATE'}</span>
+          <button onClick={() => setShowSettings(true)} title="Configure LLM provider/key"
+            className={`px-2 cursor-pointer hover:opacity-80 ${health?.llm_configured ? 'bg-black text-[#FF8C00]' : 'bg-red-600 text-white'}`}>
+            LLM:{health?.llm_configured ? (health.llm_info?.models?.strategy?.split(',')[0].trim().toUpperCase() || 'ON') : 'TEMPLATE'}
+          </button>
         </span>
       </div>
 
@@ -197,17 +291,26 @@ export default function LiveFire() {
         {[
           ['F1', 'RUN', () => run('round'), running],
           ['F2', 'TOUR', () => run('tournament'), running],
+          ['F3', 'TAXONOMY', () => setScreen('taxonomy'), false],
+          ['F4', 'RAILS', () => setScreen('rails'), false],
+          ['F5', 'MULTI-RAIL', () => { setScreen('multirail'); if (!multiRail) runMultiRailScreen(); }, false],
           ['F9', 'EXPORT', runExport, false],
           ['ESC', 'CLEAR', runClear, false],
         ].map(([k, v, fn, dis]) => (
           <button key={k} onClick={fn} disabled={dis} title={`Keyboard: ${k}`}
-            className="flex items-center gap-1 px-2 py-[2px] bg-black border border-[#333] hover:border-[#FF8C00] hover:bg-[#161200] disabled:opacity-40 disabled:cursor-wait cursor-pointer">
+            className={`flex items-center gap-1 px-2 py-[2px] border cursor-pointer disabled:opacity-40 disabled:cursor-wait ${
+              (k === 'F3' && screen === 'taxonomy') || (k === 'F4' && screen === 'rails') || (k === 'F5' && screen === 'multirail')
+                ? 'bg-[#FF8C00] text-black border-[#FF8C00]' : 'bg-black border-[#333] hover:border-[#FF8C00] hover:bg-[#161200]'}`}>
             <span className="bg-[#FF8C00] text-black px-1 font-black">{k}</span> {v}
           </button>
         ))}
         <button onClick={() => setShowDetect(s => !s)} title="Score custom transactions"
           className={`flex items-center gap-1 px-2 py-[2px] border cursor-pointer ${showDetect ? 'bg-[#FF8C00] text-black border-[#FF8C00]' : 'bg-black border-[#333] hover:border-[#FF8C00] hover:bg-[#161200]'}`}>
           <span className={showDetect ? 'bg-black text-[#FF8C00] px-1 font-black' : 'bg-[#FF8C00] text-black px-1 font-black'}>F10</span> DETECT
+        </button>
+        <button onClick={() => setShowSettings(s => !s)} title="Configure LLM provider/key"
+          className={`flex items-center gap-1 px-2 py-[2px] border cursor-pointer ${showSettings ? 'bg-[#FF8C00] text-black border-[#FF8C00]' : 'bg-black border-[#333] hover:border-[#FF8C00] hover:bg-[#161200]'}`}>
+          <span className={showSettings ? 'bg-black text-[#FF8C00] px-1 font-black' : 'bg-[#FF8C00] text-black px-1 font-black'}>F11</span> SETTINGS
         </button>
         <span className="ml-auto text-[#666]">VECTORS {vectors.length}  -  LEDGER {health?.ledger_campaigns || 0}  -  PROFILE {profile}  -  TYPE HELP &lt;GO&gt;</span>
       </div>
@@ -223,8 +326,88 @@ export default function LiveFire() {
           </button>
         ))}
         <span className="text-[#444] shrink-0 ml-1">({selVecs.size || 'all'} selected, last = held-out)</span>
+        <span className="ml-auto shrink-0 flex gap-1">
+          {['blotter', 'taxonomy', 'rails', 'multirail'].map(s => (
+            <button key={s} onClick={() => { setScreen(s); if (s === 'multirail' && !multiRail) runMultiRailScreen(); }}
+              className={`px-2 py-[1px] border uppercase ${screen === s ? 'bg-[#FF8C00] text-black border-[#FF8C00] font-black' : 'bg-black text-[#666] border-[#333]'}`}>
+              {s}
+            </button>
+          ))}
+        </span>
       </div>
 
+      {screen === 'taxonomy' && (
+        <div className="flex-1 bg-black overflow-auto min-h-0">
+          <div className="h-[20px] bg-[#111] border-b border-[#333] flex items-center px-2 text-[10px] tracking-widest font-bold text-[#FF8C00] sticky top-0">
+            TAXONOMY  -  ATTACK ATLAS ({vectors.length} VECTORS)
+          </div>
+          <div className="grid grid-cols-12 gap-0 px-2 py-[3px] bg-[#0a0a0a] border-b border-[#333] text-[10px] text-[#666] font-bold sticky top-[20px]">
+            <span className="col-span-1">ID</span><span className="col-span-2">NAME</span><span className="col-span-2">CATEGORY</span>
+            <span className="col-span-4">MECHANISM</span><span className="col-span-2">SIGNALS</span><span className="col-span-1 text-right">DIFF/NOV</span>
+          </div>
+          {vectors.map(v => (
+            <div key={v.id} onClick={() => toggleVec(v.id)}
+              className={`grid grid-cols-12 gap-0 px-2 py-[5px] text-[11px] border-b border-[#1a1a1a] cursor-pointer hover:bg-[#111] ${selVecs.has(v.id) ? 'bg-[#1a1200]' : ''}`}>
+              <span className="col-span-1 font-black text-[#FF8C00]">{v.id}</span>
+              <span className="col-span-2 truncate">{v.name}</span>
+              <span className="col-span-2 truncate text-[#888]">{v.category}</span>
+              <span className="col-span-4 text-[#999] leading-[1.3]">{v.mechanism}</span>
+              <span className="col-span-2 text-[#666] truncate">{(v.signals||[]).join(', ')}</span>
+              <span className="col-span-1 text-right font-mono text-[#666]">{v.difficulty}/{v.novelty}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {screen === 'rails' && (
+        <div className="flex-1 bg-black overflow-auto min-h-0 p-2">
+          <div className="text-[#FF8C00] text-[10px] font-bold tracking-widest mb-2">RAILS  -  {Object.keys(profiles).length} GLOBAL PROFILES</div>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(profiles).map(([key, p]) => (
+              <div key={key} className={`border p-2 text-[11px] ${profile === key ? 'border-[#FF8C00]' : 'border-[#333]'}`}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-black text-[#FF8C00]">{p.display_name || key}</span>
+                  <button onClick={() => setProfile(key)} className={`px-2 py-[1px] text-[10px] border ${profile === key ? 'bg-[#FF8C00] text-black border-[#FF8C00] font-black' : 'border-[#333] text-[#666]'}`}>{profile === key ? 'ACTIVE' : 'SELECT'}</button>
+                </div>
+                <div className="text-[#666]">CURRENCY <b className="text-white">{p.currency}</b>  TZ <b className="text-white">{p.timezone}</b></div>
+                <div className="text-[#666]">SCA STEP-UP <b className="text-white">{String(p.sca_step_up)}</b>  CHARGEBACKS <b className="text-white">{String(p.chargebacks)}</b></div>
+                <div className="text-[#666] mt-1">CHANNELS</div>
+                {Object.entries(p.channels || {}).map(([cn, c]) => (
+                  <div key={cn} className="pl-2 text-[#999] font-mono">{cn}: max {c.max} -- {(c.categories||[]).slice(0,3).join(', ')}</div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {screen === 'multirail' && (
+        <div className="flex-1 bg-black overflow-auto min-h-0 p-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[#FF8C00] text-[10px] font-bold tracking-widest">MULTI-RAIL  -  SAME VECTORS, EVERY RAIL</span>
+            <button onClick={runMultiRailScreen} disabled={multiRailBusy} className="px-3 py-[3px] bg-[#FF8C00] text-black font-black text-[10px] disabled:opacity-50">{multiRailBusy ? 'RUNNING...' : 'RE-RUN'}</button>
+          </div>
+          {!multiRail ? <div className="text-[#444] p-4 text-center">{multiRailBusy ? 'SCORING ALL 4 RAILS...' : 'NO DATA -- HIT RE-RUN'}</div> : (
+            <table className="w-full text-[11px]">
+              <thead><tr className="text-[#666] text-left border-b border-[#333]"><th className="py-1">RAIL</th><th>HELD-OUT DET</th><th>BENIGN FP</th><th>F1</th></tr></thead>
+              <tbody>
+                {Object.entries(multiRail).map(([rail, r]) => (
+                  <tr key={rail} className="border-b border-[#1a1a1a]">
+                    <td className="py-1 font-black text-[#FF8C00]">{rail}</td>
+                    {r.error ? <td colSpan={3} className="text-red-500">{r.error}</td> : (<>
+                      <td className={r.held_out_detection_rate > 0.5 ? 'text-[#00FF00]' : 'text-red-500'}>{(r.held_out_detection_rate*100).toFixed(1)}%</td>
+                      <td>{(r.benign_fp_rate*100).toFixed(2)}%</td>
+                      <td>{r.overall?.f1}</td>
+                    </>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {screen === 'blotter' && (
       <div className="flex-1 grid grid-cols-12 gap-[1px] bg-[#222] p-[1px] min-h-0">
         {/* LEFT  -  BLOTTER */}
         <div className="col-span-8 bg-black flex flex-col min-h-0">
@@ -336,6 +519,7 @@ export default function LiveFire() {
           </div>
         </div>
       </div>
+      )}
 
       {/* LOG TAPE */}
       <div className="h-[110px] bg-[#0a0a0a] border-t border-[#333] flex flex-col shrink-0">
