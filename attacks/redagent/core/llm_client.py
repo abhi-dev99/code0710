@@ -136,6 +136,17 @@ class LLMClient:
         if self._cx is not None and not self._cx.is_closed:
             await self._cx.aclose()
 
+    def describe(self) -> dict[str, Any]:
+        """Safe-to-expose runtime config for a settings UI -- never the raw key."""
+        key = self._key
+        hint = ("*" * max(0, len(key) - 4)) + key[-4:] if len(key) > 4 else "*" * len(key)
+        return {
+            "base_url": self._base,
+            "models": dict(self._models),
+            "reasoning_effort": self._reasoning_effort,
+            "api_key_hint": hint,
+        }
+
     @classmethod
     def from_env(cls) -> "LLMClient | None":
         base_url = os.environ.get("LLM_BASE_URL", "").strip()
@@ -187,10 +198,12 @@ class LLMClient:
                 return await self._complete_with_model(model, messages, temperature, json_mode, effort)
             except LLMError as e:
                 last_err = e
-                failover_codes = ("429", "404")
+                failover_codes = ("429", "404", "402")
                 if not any(code in str(e) for code in failover_codes):
                     raise  # errors another model in the chain can't fix
-                reason = "rate-limited upstream" if "429" in str(e) else "not found upstream (retired/renamed?)"
+                reason = ("rate-limited upstream" if "429" in str(e)
+                          else "insufficient credit for this model" if "402" in str(e)
+                          else "not found upstream (retired/renamed?)")
                 print(f"[llm] {model} {reason} - failing over")
         raise LLMError(f"All models in chain failed: {last_err}")
 

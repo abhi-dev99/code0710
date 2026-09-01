@@ -14,11 +14,14 @@ Endpoints:
   GET  /api/ledger/export -> full ledger as CSV download
   GET  /api/rounds        -> round history
   POST /api/detect        -> score transactions with the current ensemble
+  GET  /api/llm-config    -> current red-team provider/model (no raw key)
+  POST /api/llm-config    -> swap provider/key/model at runtime, live-tested
 
 Run: uvicorn app.api:app --reload --port 8000
 """
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
@@ -101,7 +104,7 @@ def _load_persisted_ensemble() -> bool:
 
 ENSEMBLE_RELOADED = _load_persisted_ensemble()
 
-# ---- lazy red-team LLM client: the dashboard's ox-alpha checkbox must actually
+# ---- lazy red-team LLM client: the dashboard's use_llm checkbox must actually
 # reach the planner (audit finding: use_llm was silently a no-op via the API) ----
 _llm_client: Any = None
 _llm_tried = False
@@ -121,12 +124,24 @@ def get_llm() -> Any:
     return _llm_client
 
 
+class LLMConfigRequest(BaseModel):
+    """Bring-your-own-provider: swap the red-team model at runtime, no .env
+    edit or restart needed. Provider-agnostic -- any OpenAI-compatible chat
+    completions endpoint works, OpenRouter is just the default because one
+    key covers every model below without separate provider accounts."""
+    base_url: str = Field(default="https://openrouter.ai/api/v1", min_length=8, max_length=300)
+    api_key: str = Field(min_length=8, max_length=300)
+    model_strategy: str = Field(default="google/gemini-3-flash-preview", min_length=1, max_length=200)
+    model_bulk: str | None = Field(default=None, max_length=200)
+    reasoning_effort: str = Field(default="max", pattern="^(max|high|medium|low|minimal)$")
+
+
 class RoundRequest(BaseModel):
     rail_profile: RailProfileKey = Field(default="card_intl")
     vector_ids: list[str] | None = Field(default=None, max_length=MAX_VECTOR_IDS)
     n_benign: int = Field(default=2400, ge=400, le=20000)
     seed: int = Field(default=710, ge=0, le=MAX_SEED)
-    use_llm: bool = Field(default=False, description="true = ox-alpha plans (needs quota); false = deterministic templates")
+    use_llm: bool = Field(default=False, description="true = LLM-generated plans (needs a configured provider, see /api/llm-config); false = deterministic templates")
 
 
 class DetectRequest(BaseModel):
@@ -160,8 +175,44 @@ def health() -> dict:
         "ensemble_artifact": str(ENSEMBLE_ARTIFACT.relative_to(_ROOT))
         if ENSEMBLE_ARTIFACT.exists() else None,
         "llm_configured": get_llm() is not None,
+        "llm_info": get_llm().describe() if get_llm() is not None else None,
         "detect_latency_ms": _latency_summary(),
     }
+
+
+@app.get("/api/llm-config")
+def get_llm_config() -> dict:
+    llm = get_llm()
+    if llm is None:
+        return {"configured": False}
+    return {"configured": True, **llm.describe()}
+
+
+@app.post("/api/llm-config")
+def post_llm_config(req: LLMConfigRequest) -> dict:
+    """Swap the red-team provider/key/model at runtime. Validated with a real
+    (cheap, non-JSON) call before it's accepted, so a bad key or a dead model
+    slug fails loudly here instead of silently degrading every round after
+    this to template mode."""
+    global _llm_client, _llm_tried
+    from redagent.core.llm_client import LLMClient, LLMError
+
+    models = {"strategy": req.model_strategy, "bulk": req.model_bulk or req.model_strategy}
+    try:
+        candidate = LLMClient(
+            base_url=req.base_url.rstrip("/"), api_key=req.api_key, models=models,
+            reasoning_effort=req.reasoning_effort,
+        )
+    except LLMError as e:
+        raise HTTPException(400, str(e)) from e
+    try:
+        asyncio.run(candidate.complete("strategy", system="Reply with exactly: OK", user="ping"))
+    except Exception as e:
+        raise HTTPException(400, f"provider rejected a live test call: {type(e).__name__}: {e}") from e
+    with _state_lock:
+        _llm_client = candidate
+        _llm_tried = True
+    return {"ok": True, **candidate.describe()}
 
 
 def _latency_summary() -> dict | None:
