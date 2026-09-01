@@ -25,6 +25,7 @@ import random
 import sys
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -87,21 +88,6 @@ def _channel_for(vector: dict, profile_key: str) -> str:
     """Pick a plan channel from the profile that fits the vector's target rails."""
     p = get_profile(profile_key)
     rails = set(vector.get("target_rails", []))
-
-
-def _deterministic_now(profile_key: str, seed: int) -> datetime:
-    """Create a deterministic timezone-aware datetime from seed for reproducible timestamps."""
-    p = get_profile(profile_key)
-    tz = ZoneInfo(p.timezone_name)
-    # Use seed to generate a deterministic hour/minute/second within the day
-    rng = random.Random(seed)
-    hour = rng.randint(0, 23)
-    minute = rng.randint(0, 59)
-    second = rng.randint(0, 59)
-    # Use a fixed reference date (deterministic from seed)
-    day_offset = rng.randint(0, 365)
-    base = datetime(2026, 1, 1, tzinfo=ZoneInfo(p.timezone_name))
-    return base + timedelta(days=day_offset, hours=hour, minutes=minute, seconds=second)
     if "card_online" in rails and "card_not_present" in p.channels:
         return "card_not_present"
     if "atm" in rails and "atm" in p.channels:
@@ -111,6 +97,18 @@ def _deterministic_now(profile_key: str, seed: int) -> datetime:
     if "pos" in rails and "card_present" in p.channels:
         return "card_present"
     return p.channel_names()[0]
+
+
+def _deterministic_now(profile_key: str, seed: int) -> datetime:
+    """Create a deterministic timezone-aware datetime from seed for reproducible timestamps."""
+    p = get_profile(profile_key)
+    rng = random.Random(seed)
+    hour = rng.randint(0, 23)
+    minute = rng.randint(0, 59)
+    second = rng.randint(0, 59)
+    day_offset = rng.randint(0, 365)
+    base = datetime(2026, 1, 1, tzinfo=ZoneInfo(p.timezone_name))
+    return base + timedelta(days=day_offset, hours=hour, minutes=minute, seconds=second)
 
 
 def template_plan(vector_id: str, profile_key: str) -> dict[str, Any]:

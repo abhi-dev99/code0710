@@ -22,8 +22,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-# Import config and vendor modules without polluting sys.path
-from config.rail_profiles import RailProfile, get_profile  # noqa: E402
+# Flat import (not `config.rail_profiles`): config/ is on sys.path everywhere
+# else in this codebase, and a package-qualified import here loads a second,
+# non-identical RailProfile class -> isinstance() silently fails downstream.
+from rail_profiles import RailProfile, get_profile  # noqa: E402
 
 # Vendor imports - explicit path
 _VENDOR_ML = Path(__file__).resolve().parents[3] / "vendor" / "argus" / "backend" / "ml"
