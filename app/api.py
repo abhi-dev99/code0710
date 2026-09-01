@@ -25,11 +25,16 @@ import json
 import sys
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+
+RailProfileKey = Literal["card_intl", "eu_psd2", "us_cnp", "upi_in"]
+MAX_SEED = 2_147_483_647  # fits int32; safe across numpy default_rng and random.Random
+MAX_VECTOR_IDS = 14  # taxonomy size; a request can't sensibly name more distinct vectors
+MAX_TOURNAMENT_WORKLOAD = 500_000  # squad_size * generations * n_benign per anonymous call
 
 _ROOT = Path(__file__).resolve().parents[1]
 for p in ("attacks", "config", "defense", "arena"):
@@ -100,22 +105,22 @@ def get_llm() -> Any:
 
 
 class RoundRequest(BaseModel):
-    rail_profile: str = Field(default="card_intl")
-    vector_ids: list[str] | None = None
+    rail_profile: RailProfileKey = Field(default="card_intl")
+    vector_ids: list[str] | None = Field(default=None, max_length=MAX_VECTOR_IDS)
     n_benign: int = Field(default=2400, ge=400, le=20000)
-    seed: int = Field(default=710)
+    seed: int = Field(default=710, ge=0, le=MAX_SEED)
     use_llm: bool = Field(default=False, description="true = ox-alpha plans (needs quota); false = deterministic templates")
 
 
 class DetectRequest(BaseModel):
-    transactions: list[dict[str, Any]]
+    transactions: list[dict[str, Any]] = Field(max_length=5000)
 
 
 class TournamentRequest(BaseModel):
-    rail_profile: str = Field(default="card_intl")
-    vector_ids: list[str] | None = None
+    rail_profile: RailProfileKey = Field(default="card_intl")
+    vector_ids: list[str] | None = Field(default=None, max_length=MAX_VECTOR_IDS)
     n_benign: int = Field(default=2400, ge=400, le=20000)
-    seed: int = Field(default=710)
+    seed: int = Field(default=710, ge=0, le=MAX_SEED)
     use_llm: bool = Field(default=False)
     squad_size: int = Field(default=10, ge=2, le=32, description="red candidates per vector per generation")
     generations: int = Field(default=2, ge=1, le=5)
@@ -236,6 +241,13 @@ def post_tournament(req: TournamentRequest) -> dict:
         bad = [v for v in req.vector_ids if v not in VECTORS]
         if bad:
             raise HTTPException(400, f"unknown vector ids: {bad}")
+    workload = req.squad_size * req.generations * req.n_benign
+    if workload > MAX_TOURNAMENT_WORKLOAD:
+        raise HTTPException(
+            400,
+            f"squad_size*generations*n_benign={workload} exceeds the per-call cap "
+            f"({MAX_TOURNAMENT_WORKLOAD}); lower one of squad_size/generations/n_benign",
+        )
     try:
         summary = run_tournament(
             profile_key=req.rail_profile, vector_ids=req.vector_ids,

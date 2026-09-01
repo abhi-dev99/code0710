@@ -21,16 +21,39 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_DEFAULT_DB = Path(os.environ.get("LIVEFIRE_DB",
-                                  Path(__file__).resolve().parents[3] / "arena_ledger.db"))
+_SENSITIVE_ROOTS = tuple(Path(r) for r in ("/etc", "/sys", "/proc", "/dev", "/boot"))
+
+
+def _validate_db_path(path: str | Path) -> Path:
+    """Basic sanity check on a caller/env-supplied sqlite path (LIVEFIRE_DB):
+    reject directories and refuse to write inside an OS-sensitive root."""
+    p = Path(path).resolve()
+    if p.exists() and p.is_dir():
+        raise ValueError(f"LIVEFIRE_DB points at a directory, not a file: {p}")
+    if any(p == root or root in p.parents for root in _SENSITIVE_ROOTS):
+        raise ValueError(f"LIVEFIRE_DB refuses to write inside a system directory: {p}")
+    return p
+
+
+_DEFAULT_DB = _validate_db_path(os.environ.get(
+    "LIVEFIRE_DB", Path(__file__).resolve().parents[3] / "arena_ledger.db"))
 
 
 class StrategyMemory:
     def __init__(self, db_path: str | Path | None = None):
-        self._path = str(db_path or _DEFAULT_DB)
+        self._path = str(_validate_db_path(db_path) if db_path else _DEFAULT_DB)
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(self._path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # PRAGMA foreign_keys=ON is intentionally NOT set here: run_tournament()
+        # (arena/loop.py) calls record_round() with a synthetic aggregate
+        # campaign_id ("{profile}_g{gen}_tournament") that is never inserted via
+        # record_campaign() -- enforcing the FK makes every tournament round raise
+        # sqlite3.IntegrityError. Fix belongs in arena/loop.py's run_tournament
+        # (insert a matching campaign row for the aggregate id, or stop treating
+        # rounds.campaign_id as a hard FK), not here.
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        self._conn.execute("PRAGMA busy_timeout = 5000")
         self._migrate()
 
     def _migrate(self) -> None:
@@ -108,36 +131,41 @@ class StrategyMemory:
 
     def vector_stats(self) -> list[dict[str, Any]]:
         """Per-vector: attempts, mean detection rate — the red agent's report card."""
-        cur = self._conn.execute(
-            "SELECT vector, COUNT(*) AS attempts, AVG(detection_rate) AS avg_detection, "
-            "SUM(detected) AS times_caught, MAX(ts) AS last_seen "
-            "FROM campaigns GROUP BY vector ORDER BY attempts DESC"
-        )
-        return [dict(r) for r in cur.fetchall()]
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT vector, COUNT(*) AS attempts, AVG(detection_rate) AS avg_detection, "
+                "SUM(detected) AS times_caught, MAX(ts) AS last_seen "
+                "FROM campaigns GROUP BY vector ORDER BY attempts DESC"
+            )
+            return [dict(r) for r in cur.fetchall()]
 
     def caught_plans(self, limit: int = 20) -> list[dict[str, Any]]:
         """Recently caught plans (detection_rate high) — mutation fuel."""
-        cur = self._conn.execute(
-            "SELECT * FROM campaigns WHERE detection_rate >= 0.5 "
-            "ORDER BY ts DESC LIMIT ?", (limit,))
-        return [dict(r) for r in cur.fetchall()]
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM campaigns WHERE detection_rate >= 0.5 "
+                "ORDER BY ts DESC LIMIT ?", (limit,))
+            return [dict(r) for r in cur.fetchall()]
 
     def evaded_plans(self, limit: int = 20) -> list[dict[str, Any]]:
         """Successful evasions — the red agent's trophy shelf."""
-        cur = self._conn.execute(
-            "SELECT * FROM campaigns WHERE detection_rate < 0.1 "
-            "ORDER BY ts DESC LIMIT ?", (limit,))
-        return [dict(r) for r in cur.fetchall()]
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM campaigns WHERE detection_rate < 0.1 "
+                "ORDER BY ts DESC LIMIT ?", (limit,))
+            return [dict(r) for r in cur.fetchall()]
 
     def ledger(self, limit: int = 100) -> list[dict[str, Any]]:
-        cur = self._conn.execute(
-            "SELECT * FROM campaigns ORDER BY ts DESC LIMIT ?", (limit,))
-        return [dict(r) for r in cur.fetchall()]
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM campaigns ORDER BY ts DESC LIMIT ?", (limit,))
+            return [dict(r) for r in cur.fetchall()]
 
     def round_history(self, limit: int = 100) -> list[dict[str, Any]]:
-        cur = self._conn.execute(
-            "SELECT * FROM rounds ORDER BY id DESC LIMIT ?", (limit,))
-        return [dict(r) for r in cur.fetchall()]
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM rounds ORDER BY id DESC LIMIT ?", (limit,))
+            return [dict(r) for r in cur.fetchall()]
 
     def close(self) -> None:
         with self._lock:
