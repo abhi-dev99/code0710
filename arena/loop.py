@@ -1,8 +1,8 @@
-﻿"""
-LiveFire Arena Ã¢â‚¬â€ the closed loop.
+"""
+LiveFire Arena - the closed loop.
 
 Round flow:
-  1. Anchor benign traffic to the REAL corpus (ULB bootstrap Ã¢â‚¬â€ honesty protocol)
+  1. Anchor benign traffic to the REAL corpus (ULB bootstrap - honesty protocol)
   2. RED: per attack vector, ox-alpha emits generator-parameter plans
      (mutation-aware: strategy memory shows what got caught before).
      Deterministic template fallback keeps the product alive without LLM quota.
@@ -36,12 +36,12 @@ for p in ("attacks", "config", "defense"):
     if sp not in sys.path:
         sys.path.insert(0, sp)
 
-from features.arena_features import FEATURE_NAMES, build_features  # noqa: E402
-from models.backbone import BLUE_VERSION, BlueEnsemble  # noqa: E402
-from rail_profiles import PROFILES, get_profile  # noqa: E402
-from redagent.core.llm_client import LLMClient, LLMError  # noqa: E402
-from redagent.core.strategy_memory import StrategyMemory  # noqa: E402
-from redagent.core.transaction_weaver import generate_benign, weave_attack_plan  # noqa: E402
+from features.arena_features import FEATURE_NAMES, build_features # noqa: E402
+from models.backbone import BLUE_VERSION, BlueEnsemble # noqa: E402
+from rail_profiles import PROFILES, get_profile # noqa: E402
+from redagent.core.llm_client import LLMClient, LLMError # noqa: E402
+from redagent.core.strategy_memory import StrategyMemory # noqa: E402
+from redagent.core.transaction_weaver import generate_benign, weave_attack_plan # noqa: E402
 
 TAXONOMY = json.loads((_ROOT / "attacks" / "taxonomy.json").read_text(encoding="utf-8"))
 VECTORS = {v["id"]: v for v in TAXONOMY["vectors"]}
@@ -55,7 +55,7 @@ ARENA_SYSTEM = (
     "attack traffic that stress-tests our detectors. Respond ONLY with valid JSON."
 )
 
-# Deterministic fallback plans Ã¢â‚¬â€ product works with zero LLM quota.
+# Deterministic fallback plans - product works with zero LLM quota.
 _TEMPLATE_PLANS: dict[str, dict[str, Any]] = {
     "velocity_burst": {
         "structuring": [{"amount": 1.0, "count": 40}, {"amount": 9.0, "count": 25}, {"amount": 49.0, "count": 15}],
@@ -121,7 +121,7 @@ def template_plan(vector_id: str, profile_key: str) -> dict[str, Any]:
         fam = "night_raids"
     elif "mule" in v["name"] or "launder" in v["name"] or "layer" in v["name"]:
         fam = "mule_layering"
-    base = json.loads(json.dumps(_TEMPLATE_PLANS[fam]))  # deep copy
+    base = json.loads(json.dumps(_TEMPLATE_PLANS[fam])) # deep copy
     p = get_profile(profile_key)
     ch = p.channels[_channel_for(v, profile_key)]
     base["vector"] = v["name"]
@@ -159,7 +159,7 @@ async def _llm_plan_async(
             mutation_ctx += f"\nLast caught plan ({c['vector']}, detection={c['detection_rate']}): {c['evasion_notes']}"
 
     user = (
-        f"Attack vector: {v['id']} {v['name']} Ã¢â‚¬â€ {v['mechanism']}\n"
+        f"Attack vector: {v['id']} {v['name']} - {v['mechanism']}\n"
         f"GenAI component: {v['genai_component']}\n"
         f"Rail profile: {p.key} (channels: {p.channel_names()})\n"
         f"Use channel '{ch.name}' (categories: {list(ch.categories)}, "
@@ -191,10 +191,10 @@ def llm_plan(
 # ------------------------------------------------------------- real anchors
 
 def real_anchor() -> tuple[np.ndarray, list[float]]:
-    """Bootstrap pools from the REAL corpus (ULB) Ã¢â‚¬â€ the honesty protocol.
+    """Bootstrap pools from the REAL corpus (ULB) - the honesty protocol.
     K4: on a clean clone without committed splits this USED to raise
     FileNotFoundError and 500 every round. Now falls back to broad uniform
-    pools with a loud warning Ã¢â‚¬â€ the arena runs, but every artifact produced
+    pools with a loud warning - the arena runs, but every artifact produced
     without splits must be labeled 'not real-corpus anchored'."""
     splits = _ROOT / "data" / "splits" / "ulb_train.parquet"
     if splits.exists():
@@ -203,7 +203,7 @@ def real_anchor() -> tuple[np.ndarray, list[float]]:
         hours = ((df["Time"] / 3600.0) % 24).astype(int)
         hw = [float((hours == h).mean()) for h in range(24)]
         return amounts, hw
-    print("[arena] WARNING: data/splits/ulb_train.parquet missing Ã¢â‚¬â€ benign "
+    print("[arena] WARNING: data/splits/ulb_train.parquet missing - benign "
           "traffic is NOT real-corpus anchored (uniform fallback). Run "
           "data/download_datasets.py + data/build_splits.py for honest anchors.")
     return np.linspace(1.0, 500.0, 200), [1 / 24] * 24
@@ -212,7 +212,7 @@ def real_anchor() -> tuple[np.ndarray, list[float]]:
 # ----------------------------------------------------------------- SHAP why
 
 def shap_why(ensemble: BlueEnsemble, X: np.ndarray, idxs: list[int], top_k: int = 3) -> str:
-    """Top-k feature reasons for flagged rows Ã¢â‚¬â€ the 'why caught' text."""
+    """Top-k feature reasons for flagged rows - the 'why caught' text."""
     if not idxs:
         return "no flagged rows to explain"
     import shap
@@ -238,7 +238,7 @@ def run_round(
     memory: StrategyMemory | None = None,
     llm: LLMClient | None = None,
 ) -> dict[str, Any]:
-    """One full redÃ¢â€ â€™weaveÃ¢â€ â€™blueÃ¢â€ â€™explainÃ¢â€ â€™record cycle. Returns a JSON-able summary."""
+    """One full red - weave - blue - explain - record cycle. Returns a JSON-able summary."""
     p = get_profile(profile_key)
     vector_ids = vector_ids or list(VECTORS.keys())[:4]
     for vid in vector_ids:
@@ -264,14 +264,14 @@ def run_round(
                 plan = llm_plan(llm, vid, profile_key, memory)
                 used_llm = True
             except (LLMError, json.JSONDecodeError, KeyError, TypeError) as e:
-                print(f"[arena] LLM plan failed for {vid} ({type(e).__name__}) Ã¢â‚¬â€ template fallback")
+                print(f"[arena] LLM plan failed for {vid} ({type(e).__name__}) - template fallback")
         if plan is None:
             plan = template_plan(vid, profile_key)
         if VECTORS[vid].get("category") == "agentic_payment_attack":
-            plan.setdefault("memo_injection", True)   # P2.4: Category D signal
+            plan.setdefault("memo_injection", True) # P2.4: Category D signal
         out = weave_attack_plan(plan, profile=p, seed=seed + 100 + i, now_override=deterministic_now)
         if not out["ok"]:
-            print(f"[arena] plan unweaveable for {vid}: {out['errors']} Ã¢â‚¬â€ template fallback")
+            print(f"[arena] plan unweaveable for {vid}: {out['errors']} - template fallback")
             out = weave_attack_plan(template_plan(vid, profile_key), profile=p, seed=seed + 100 + i)
         campaigns.append({"vector_id": vid, "plan": plan, "used_llm": used_llm, **out})
 
@@ -361,7 +361,7 @@ def run_round(
         "benign_fp_rate": fp_rate,
         "shap_why": why,
         "n_benign": n_benign,
-        "_ensemble": ensemble,  # popped by the API layer; never serialized
+        "_ensemble": ensemble, # popped by the API layer; never serialized
     }
 
 
@@ -373,28 +373,28 @@ def run_multi_rail(vector_ids: list[str] | None = None, n_benign: int = 1500,
         try:
             out[key] = run_round(profile_key=key, vector_ids=vector_ids,
                                  n_benign=n_benign, seed=seed, use_llm=use_llm)
-            out[key].pop("_ensemble", None)   # K5: never serialize fitted ensembles
-        except Exception as e:  # keep other rails alive if one profile fails
+            out[key].pop("_ensemble", None) # K5: never serialize fitted ensembles
+        except Exception as e: # keep other rails alive if one profile fails
             out[key] = {"error": f"{type(e).__name__}: {e}"}
     return out
 
 
 # ====================================================================
-# RED TOURNAMENT Ã¢â‚¬â€ population-based red teaming.
+# RED TOURNAMENT - population-based red teaming.
 # Per vector, a SQUAD of candidate plans (default 10) attacks; blue
 # trains on the train split; held-out candidates are scored
 # individually and the most EVASIVE becomes the vector's champion.
 # SHAP intelligence flows into the next generation's prompts. Red
 # fields squad_size x |vectors| plans per generation vs blue's single
-# ensemble retrain Ã¢â‚¬â€ the 10x capacity asymmetry.
+# ensemble retrain - the 10x capacity asymmetry.
 # ====================================================================
 
-_SQUAD_CONCURRENCY = 8  # availability only (shared free pool); NOT a token cap
+_SQUAD_CONCURRENCY = 8 # availability only (shared free pool); NOT a token cap
 
 
 def _squad_plan_template(vector_id: str, profile_key: str, idx: int, seed: int,
                          shap_ctx: str = "") -> dict[str, Any]:
-    """Deterministic perturbed variant of the template plan Ã¢â‚¬â€ squad diversity
+    """Deterministic perturbed variant of the template plan - squad diversity
     without an LLM. SHAP-AWARE (audit T2): when the blue team's top features
     are known, parameter mutations bias AGAINST those features, so the
     intelligence channel fires on every path, not just the LLM one."""
@@ -465,24 +465,24 @@ async def _llm_squad_async(
 ) -> list[dict[str, Any] | None]:
     """squad_size candidate plans for one vector, generated concurrently with a
     temperature ladder + explicit diversification orders. Failed candidates
-    return None (the template squad fills the gap Ã¢â‚¬â€ never lose the round)."""
+    return None (the template squad fills the gap - never lose the round)."""
     v = VECTORS[vector_id]
     p = get_profile(profile_key)
     ch = p.channels[_channel_for(v, profile_key)]
     mut = _mutation_context(memory)
     evade = ""
     if gen > 1 and shap_ctx:
-        evade = ("\nDETECTOR INTELLIGENCE Ã¢â‚¬â€ the blue ensemble's top SHAP features "
+        evade = ("\nDETECTOR INTELLIGENCE - the blue ensemble's top SHAP features "
                  f"right now: {shap_ctx}\nCraft parameters that are WEAK on those "
                  "features (e.g. low velocity, small amounts, few shared devices, "
-                 "daylight hours Ã¢â‚¬â€ whatever starves the top features).")
+                 "daylight hours - whatever starves the top features).")
     sem = asyncio.Semaphore(_SQUAD_CONCURRENCY)
 
     async def one(i: int) -> dict[str, Any] | None:
         async with sem:
             temp = 0.7 + 0.05 * i
             user = (
-                f"Attack vector: {v['id']} {v['name']} Ã¢â‚¬â€ {v['mechanism']}\n"
+                f"Attack vector: {v['id']} {v['name']} - {v['mechanism']}\n"
                 f"GenAI component: {v['genai_component']}\n"
                 f"Rail profile: {p.key} (channels: {p.channel_names()})\n"
                 f"Use channel '{ch.name}' (categories: {list(ch.categories)}, "
@@ -491,7 +491,7 @@ async def _llm_squad_async(
                 f"You are candidate #{i + 1} of {squad_size} in generation {gen} of a "
                 "red-team tournament. Squadmates are exploring other parameter "
                 "regions: pick a DISTINCT combination of amounts, timing, entity "
-                "counts and window length Ã¢â‚¬â€ maximize the chance at least ONE squad "
+                "counts and window length - maximize the chance at least ONE squad "
                 "member evades detection.\n\n"
                 'Emit ONLY JSON: {"vector": str, "channel": str, '
                 '"merchant_categories": [str], "structuring": [{"amount": number, "count": int}], '
@@ -510,7 +510,7 @@ async def _llm_squad_async(
                 return plan
             except (LLMError, json.JSONDecodeError, KeyError, TypeError) as e:
                 print(f"[arena] squad candidate {i + 1}/{squad_size} failed for "
-                      f"{vector_id}: {type(e).__name__} Ã¢â‚¬â€ template fills")
+                      f"{vector_id}: {type(e).__name__} - template fills")
                 return None
 
     return list(await asyncio.gather(*(one(i) for i in range(squad_size))))
@@ -554,7 +554,7 @@ def run_tournament(
     memory = memory or StrategyMemory()
 
     gens_out: list[dict[str, Any]] = []
-    prior_campaigns: list[dict[str, Any]] = []   # everything blue has been taught
+    prior_campaigns: list[dict[str, Any]] = [] # everything blue has been taught
     shap_ctx = ""
     ensemble: BlueEnsemble | None = None
 
@@ -569,7 +569,7 @@ def run_tournament(
                     plans = asyncio.run(_llm_squad_async(
                         llm, vid, profile_key, squad_size, gen, shap_ctx, memory))
                 except LLMError as e:
-                    print(f"[arena] LLM squad failed for {vid} ({e}) Ã¢â‚¬â€ template squad")
+                    print(f"[arena] LLM squad failed for {vid} ({e}) - template squad")
             cands: list[dict[str, Any]] = []
             for j in range(squad_size):
                 plan = plans[j]
@@ -578,7 +578,7 @@ def run_tournament(
                 else:
                     n_llm += 1
                 if VECTORS[vid].get("category") == "agentic_payment_attack":
-                    plan.setdefault("memo_injection", True)   # P2.4: Category D
+                    plan.setdefault("memo_injection", True) # P2.4: Category D
                 out = weave_attack_plan(plan, profile=p, seed=seed + 1000 * gen + 100 * vi + j, now_override=deterministic_now)
                 if not out["ok"]:
                     out = weave_attack_plan(_squad_plan_template(vid, profile_key, j, seed + gen, shap_ctx),
@@ -634,7 +634,7 @@ def run_tournament(
         for vid in squads:
             vid_rows = [(v2, c, d) for (v2, c, d) in cand_rows if v2 == vid]
             if vid_rows:
-                v2, c, d = min(vid_rows, key=lambda r: r[2])   # most evasive wins
+                v2, c, d = min(vid_rows, key=lambda r: r[2]) # most evasive wins
                 champions.append({"vector": c["plan"]["vector"], "vector_id": v2,
                                   "squad_idx": c["squad_idx"], "llm_generated": c["used_llm"],
                                   "detection_rate": round(d, 4)})
@@ -677,7 +677,7 @@ def run_tournament(
                 for (vid, c, det) in cand_rows
             ],
         })
-        # blue has now seen this generation Ã¢â‚¬â€ next gen red mutates against it
+        # blue has now seen this generation - next gen red mutates against it
         prior_campaigns += train_c + hold_c
 
     return {
@@ -689,7 +689,7 @@ def run_tournament(
         "escalation": [g["held_out_detection_rate"] for g in gens_out],
         "red_advantage": round(1.0 - min(g["held_out_detection_rate"] for g in gens_out), 4),
         "n_benign": n_benign,
-        "_ensemble": ensemble,  # popped by the API layer; never serialized
+        "_ensemble": ensemble, # popped by the API layer; never serialized
     }
 
 

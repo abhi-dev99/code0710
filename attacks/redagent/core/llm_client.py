@@ -109,16 +109,26 @@ class LLMClient:
         self._reasoning_effort = reasoning_effort  # e.g. "max" | "high" | "low"
         self.last_errors: list[str] = []  # per-call failure reasons from the last complete_many
         self._cx: httpx.AsyncClient | None = None   # shared connection pool (audit 06)
+        self._cx_loop: asyncio.AbstractEventLoop | None = None
 
     def _client(self) -> httpx.AsyncClient:
         """Shared AsyncClient: one connection pool across all calls instead of
         a fresh TCP+TLS handshake per complete() — less latency, less socket
-        churn under batch generation."""
-        if self._cx is None or self._cx.is_closed:
+        churn under batch generation.
+
+        Callers (arena/loop.py) wrap each top-level call in its own
+        asyncio.run(), which tears the event loop down when it returns. A
+        pooled client created under a since-closed loop raises
+        "Event loop is closed" on its next use (worst on Windows'
+        ProactorEventLoop) -- so recreate whenever the running loop changed.
+        """
+        loop = asyncio.get_running_loop()
+        if self._cx is None or self._cx.is_closed or self._cx_loop is not loop:
             self._cx = httpx.AsyncClient(
                 timeout=self._timeout,
                 limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
             )
+            self._cx_loop = loop
         return self._cx
 
     async def aclose(self) -> None:
@@ -157,7 +167,9 @@ class LLMClient:
     ) -> str:
         """Attempt models in failover order. Model strings may be comma-separated
         chains, e.g. 'model-a:free, model-b:free' — on upstream 429 (saturated
-        shared pool) the next model in the chain is tried.
+        shared pool) or 404 (retired/renamed model slug -- providers churn
+        these; a dead slug is exactly what the next model in the chain fixes)
+        the next model in the chain is tried.
 
         reasoning_effort: per-call override for the reasoning budget sent to
         reasoning models (OpenRouter unified 'reasoning' param). Falls back to
@@ -175,9 +187,11 @@ class LLMClient:
                 return await self._complete_with_model(model, messages, temperature, json_mode, effort)
             except LLMError as e:
                 last_err = e
-                if "429" not in str(e):
-                    raise  # non-rate-limit errors are not fixed by another model
-                print(f"[llm] {model} rate-limited upstream — failing over")
+                failover_codes = ("429", "404")
+                if not any(code in str(e) for code in failover_codes):
+                    raise  # errors another model in the chain can't fix
+                reason = "rate-limited upstream" if "429" in str(e) else "not found upstream (retired/renamed?)"
+                print(f"[llm] {model} {reason} - failing over")
         raise LLMError(f"All models in chain failed: {last_err}")
 
     async def _complete_with_model(
