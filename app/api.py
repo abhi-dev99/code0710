@@ -33,6 +33,7 @@ from typing import Any, Literal
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 RailProfileKey = Literal["card_intl", "eu_psd2", "us_cnp", "upi_in"]
@@ -57,19 +58,10 @@ from rail_profiles import PROFILES  # noqa: E402
 from redagent.core.strategy_memory import StrategyMemory  # noqa: E402
 
 app = FastAPI(title="LiveFire — Adversarial Co-Evolution Arena", version="1.0.0")
-# The React terminal (app/frontend, dev server on :3000) calls this API from a
-# different origin than the one it's served from -- localhost and 127.0.0.1
-# are different origins to a browser even on the same machine, and the Vite
-# dev server may also land on 5173/5174 if 3000 is taken. No credentials
-# (cookies/auth headers) cross this boundary, so a wildcard is safe; listing
-# it explicitly documents the actual local dev ports instead of "*".
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", "http://127.0.0.1:3000",
-        "http://localhost:5173", "http://127.0.0.1:5173",
-        "http://localhost:5174", "http://127.0.0.1:5174",
-    ],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -161,6 +153,15 @@ class TournamentRequest(BaseModel):
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(_ROOT / "app" / "static" / "index.html")
+
+
+_TERMINAL_DIR = _ROOT / "app" / "frontend" / "dist"
+if _TERMINAL_DIR.exists():
+    app.mount("/terminal", StaticFiles(directory=str(_TERMINAL_DIR), html=True), name="terminal")
+
+_STATIC_DIR = _ROOT / "app" / "static"
+if _STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 
 @app.get("/api/health")

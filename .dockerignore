@@ -6,4 +6,6 @@ __pycache__/
 external-audit/
 tests/_*
 data/raw/
+data/splits/*.parquet
+app/frontend/node_modules/
 *.db

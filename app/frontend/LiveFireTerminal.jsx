@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 // LIVEFIRE TERMINAL  -  LiveFire Edition
 // Dense, monospace, amber-on-black, keyboard-driven. No rounded corners. Data first.
 
-const API = 'http://127.0.0.1:8000';
+const API = typeof window !== 'undefined' && window.location.port !== '3000' ? '' : (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000');
 
 export default function LiveFire() {
   const [health, setHealth] = useState(null);

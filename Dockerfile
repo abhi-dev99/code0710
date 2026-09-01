@@ -19,5 +19,6 @@ RUN python data/build_splits.py || echo "[docker] splits not available - run dat
 # ensure ledger directory exists on the mounted volume
 RUN mkdir -p /app/data/ledger
 
-EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV PORT=8000
+EXPOSE 8000 8080
+CMD ["sh", "-c", "python -m uvicorn app.api:app --host 0.0.0.0 --port ${PORT}"]
