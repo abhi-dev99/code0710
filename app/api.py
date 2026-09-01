@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -53,6 +54,22 @@ from rail_profiles import PROFILES  # noqa: E402
 from redagent.core.strategy_memory import StrategyMemory  # noqa: E402
 
 app = FastAPI(title="LiveFire — Adversarial Co-Evolution Arena", version="1.0.0")
+# The React terminal (app/frontend, dev server on :3000) calls this API from a
+# different origin than the one it's served from -- localhost and 127.0.0.1
+# are different origins to a browser even on the same machine, and the Vite
+# dev server may also land on 5173/5174 if 3000 is taken. No credentials
+# (cookies/auth headers) cross this boundary, so a wildcard is safe; listing
+# it explicitly documents the actual local dev ports instead of "*".
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:5174", "http://127.0.0.1:5174",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 memory = StrategyMemory()
 _state_lock = threading.Lock()
 _state: dict[str, Any] = {"last_round": None, "rounds_run": 0, "ensemble": None}
