@@ -107,7 +107,7 @@ npm run dev
 ```
 IDENTIFY  14-vector taxonomy (5 families incl. agentic D1-D3) — atlas of further-researched
           vectors tracked for the next iteration, not padded into the shipped count
-GENERATE  ox-alpha-lineage model (reasoning=max, failover chains) → generator params (JSON, not free-text)
+GENERATE  configurable LLM (Gemini by default, reasoning=max, failover chains) → generator params (JSON, not free-text)
 WEAVE     Transaction Weaver → seeded, constraint-checked txns (CPU, reproducible)
 DEFEND    XGB (50%) + LR (20%) + Rules (20%) + IsolationForest (10%) → fused score, calibrated threshold
 EXPLAIN   SHAP TreeExplainer → top-k reasons → written to strategy memory (SQLite)
@@ -115,9 +115,10 @@ MUTATE    memory + SHAP context fed into next red prompt → co-evolution
 LEDGER    every campaign + round persisted; multi-rail replay; CSV export
 ```
 
-**Red** — an ox-alpha-lineage model via `attacks/redagent/core/llm_client.py`:
+**Red** — a configurable LLM (Gemini 3 by default) via `attacks/redagent/core/llm_client.py`:
+- Provider-agnostic: any OpenAI-compatible endpoint, swappable live via `/api/llm-config` — bring your own key, no restart
 - Tiered routing across a model chain
-- Failover on both `429` (rate limit) and `404` (a retired/renamed model slug — OpenRouter's free/preview tier churns these; the whole point of a chain is to survive exactly that)
+- Failover on `429` (rate limit), `404` (a retired/renamed model slug), and `402` (insufficient credit) — OpenRouter's free/preview tier churns and a $0-credit account can hit any of the three; the whole point of a chain is to survive them
 - Fence-strip on raw model output
 - Shared `AsyncClient` scoped correctly per event loop
 

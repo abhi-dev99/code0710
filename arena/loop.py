@@ -3,7 +3,7 @@ LiveFire Arena - the closed loop.
 
 Round flow:
   1. Anchor benign traffic to the REAL corpus (ULB bootstrap - honesty protocol)
-  2. RED: per attack vector, ox-alpha emits generator-parameter plans
+  2. RED: per attack vector, the configured LLM emits generator-parameter plans
      (mutation-aware: strategy memory shows what got caught before).
      Deterministic template fallback keeps the product alive without LLM quota.
   3. WEAVER: plans -> constraint-checked transactions (CPU, seeded)
@@ -141,7 +141,7 @@ async def _llm_plan_async(
     client: LLMClient, vector_id: str, profile_key: str,
     memory: StrategyMemory | None = None,
 ) -> dict[str, Any]:
-    """Ask ox-alpha for generator parameters, mutation-aware. Raises on failure."""
+    """Ask the configured LLM for generator parameters, mutation-aware. Raises on failure."""
     v = VECTORS[vector_id]
     p = get_profile(profile_key)
     ch = p.channels[_channel_for(v, profile_key)]
