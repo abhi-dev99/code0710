@@ -9,6 +9,8 @@ venv/
 *.env
 !settings.example.env
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 
 # audit stays internal until the team decides otherwise (external-audit/00_INDEX.md)

@@ -1,4 +1,7 @@
-# LiveFire 🔥
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="app/static/logo-dark.svg">
+  <img src="app/static/logo.svg" alt="LiveFire" height="60">
+</picture>
 
 **Adversarial co-evolution arena for payment-fraud defense. Red invents attacks, Blue learns to catch them, SHAP explains why — every round committed to a Robustness Ledger.**
 
