@@ -45,13 +45,9 @@ class StrategyMemory:
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(self._path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        # PRAGMA foreign_keys=ON is intentionally NOT set here: run_tournament()
-        # (arena/loop.py) calls record_round() with a synthetic aggregate
-        # campaign_id ("{profile}_g{gen}_tournament") that is never inserted via
-        # record_campaign() -- enforcing the FK makes every tournament round raise
-        # sqlite3.IntegrityError. Fix belongs in arena/loop.py's run_tournament
-        # (insert a matching campaign row for the aggregate id, or stop treating
-        # rounds.campaign_id as a hard FK), not here.
+        # run_tournament() (arena/loop.py) now inserts a matching aggregate
+        # campaign row before record_round() -- safe to enforce the FK.
+        self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA busy_timeout = 5000")
         self._migrate()

@@ -656,8 +656,17 @@ def run_tournament(
                 evasion_notes=f"gen{gen} held-out squad#{c['squad_idx']}"
                               f"{' LLM' if c['used_llm'] else ''} | why: {why[:160]}",
             )
+        tournament_campaign_id = f"{p.key}_g{gen}_tournament"
+        memory.record_campaign(
+            campaign_id=tournament_campaign_id, vector=f"tournament[{','.join(vector_ids)}]",
+            rail_profile=p.key, plan={"squad_size": squad_size, "generations": generations,
+                                       "vector_ids": vector_ids, "generation": gen},
+            n_txns=sum(len(c["txns"]) for _, c, _ in cand_rows),
+            n_dropped=sum(c["dropped"] for _, c, _ in cand_rows), detection_rate=held_det,
+            evasion_notes="aggregate row: rounds.campaign_id below references this, not a per-vector plan",
+        )
         memory.record_round(
-            campaign_id=f"{p.key}_g{gen}_tournament", blue_version=BLUE_VERSION,
+            campaign_id=tournament_campaign_id, blue_version=BLUE_VERSION,
             tp=overall["tp"], fp=overall["fp"], fn=overall["fn"], tn=overall["tn"],
             f1=overall["f1"],
             notes=f"TOURNAMENT gen{gen}: squad={squad_size}x{len(vector_ids)} "
