@@ -16,6 +16,16 @@ export default function LiveFire() {
   const [log, setLog] = useState(['LIVEFIRE LIVEFIRE TERMINAL v1.0  -  TYPE HELP <GO>']);
   const [selected, setSelected] = useState(null);
   const [profile, setProfile] = useState('card_intl');
+  const [selVecs, setSelVecs] = useState(new Set());
+  const [squadSize, setSquadSize] = useState(10);
+  const [generations, setGenerations] = useState(2);
+  const [nBenign, setNBenign] = useState(2400);
+  const [showDetect, setShowDetect] = useState(false);
+  const [detectInput, setDetectInput] = useState(JSON.stringify([
+    { txn_id: 'demo-benign', user_id: 'u_alice', device_id: 'dev_alice_1', merchant_id: 'm_grocery', channel: 'card_present', amount: 42.5, timestamp: new Date(Date.now() - 3600e3).toISOString(), location_distance_km: 3 },
+    { txn_id: 'demo-attack', user_id: 'u_burst', device_id: 'dev_shared_x', merchant_id: 'm_electronics', channel: 'card_not_present', amount: 4980, timestamp: new Date().toISOString(), location_distance_km: 1450 },
+  ], null, 1));
+  const [detectOut, setDetectOut] = useState(null);
   const inputRef = useRef(null);
 
   // clock
@@ -37,6 +47,7 @@ export default function LiveFire() {
         setVStats(l.vector_stats || []);
         setRounds(r.rounds || []);
         setVectors(v.vectors || []);
+        setSelVecs(prev => prev.size ? prev : new Set((v.vectors || []).slice(0, 4).map(x => x.id)));
       } catch {}
     };
     fetchAll();
@@ -44,14 +55,21 @@ export default function LiveFire() {
     return () => clearInterval(id);
   }, []);
 
+  const toggleVec = (id) => setSelVecs(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
   const pushLog = (m) => setLog(s => [...s.slice(-18), `${new Date().toLocaleTimeString('en-GB')}  ${m}`]);
 
   const run = async (kind) => {
     if (running) return;
     setRunning(true);
+    const vids = selVecs.size ? [...selVecs] : null;
     const body = kind === 'tournament'
-      ? { rail_profile: profile, n_benign: 2400, seed: Math.floor(Math.random()*9000)+100, squad_size: 8, generations: 2 }
-      : { rail_profile: profile, n_benign: 2400, seed: Math.floor(Math.random()*9000)+100 };
+      ? { rail_profile: profile, vector_ids: vids, n_benign: nBenign, seed: Math.floor(Math.random()*9000)+100, squad_size: squadSize, generations }
+      : { rail_profile: profile, vector_ids: vids, n_benign: nBenign, seed: Math.floor(Math.random()*9000)+100 };
     const ep = kind === 'tournament' ? '/api/tournament' : '/api/round';
     pushLog(`${kind.toUpperCase()} ${profile.toUpperCase()}  -  SENDING`);
     try {
@@ -67,28 +85,100 @@ export default function LiveFire() {
     setRunning(false);
   };
 
-  const onCmd = (e) => {
-    if (e.key !== 'Enter') return;
+  const runExport = () => { window.open(`${API}/api/ledger/export`, '_blank'); pushLog('EXPORT  -  LEDGER CSV DOWNLOAD STARTED'); };
+  const runClear = () => setLog(['SCREEN CLEARED']);
+
+  const runDetect = async () => {
+    let txns;
+    try { txns = JSON.parse(detectInput); }
+    catch { setDetectOut({ error: 'invalid JSON' }); return; }
+    try {
+      const res = await fetch(`${API}/api/detect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactions: txns }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.detail || 'error');
+      setDetectOut(j);
+      pushLog(`DETECT  -  ${j.results.length} TXNS SCORED  -  ${j.results.filter(r=>r.flagged).length} FLAGGED`);
+    } catch (e) { setDetectOut({ error: e.message }); pushLog(`ERR ${e.message}`); }
+  };
+
+  const submitCmd = () => {
     const c = cmd.trim().toUpperCase();
     setCmd('');
     if (!c) return;
     pushLog(`> ${c}`);
-    if (c === 'HELP') pushLog('CMDS: RUN | TOUR | CLEAR | EXPORT | PROFILE [card_intl|eu_psd2|us_cnp|upi_in] | HELP');
+    if (c === 'HELP') pushLog('CMDS: RUN | TOUR | CLEAR | EXPORT | DETECT | PROFILE [card_intl|eu_psd2|us_cnp|upi_in] | HELP  -  KEYS: F1 RUN, F2 TOUR, F9 EXPORT, ESC CLEAR');
     else if (c === 'RUN' || c === 'RUN <GO>') run('round');
     else if (c === 'TOUR' || c === 'TOUR <GO>') run('tournament');
-    else if (c === 'CLEAR') setLog(['SCREEN CLEARED']);
+    else if (c === 'CLEAR') runClear();
     else if (c.startsWith('PROFILE')) { const p=c.split(' ')[1]?.toLowerCase(); if(p) { setProfile(p); pushLog(`PROFILE  -  ${p}`);} }
-    else if (c === 'EXPORT') window.open(`${API}/api/ledger/export`, '_blank');
+    else if (c === 'EXPORT') runExport();
+    else if (c === 'DETECT') setShowDetect(s => !s);
     else pushLog(`UNKNOWN: ${c}  -  TYPE HELP`);
   };
+
+  const onCmd = (e) => { if (e.key === 'Enter') submitCmd(); };
+
+  // real keyboard-driven controls, matching the F-key badges shown in the UI
+  useEffect(() => {
+    const onKey = (e) => {
+      if (document.activeElement === inputRef.current && e.key !== 'F1' && e.key !== 'F2' && e.key !== 'F9' && e.key !== 'Escape') return;
+      if (e.key === 'F1') { e.preventDefault(); run('round'); }
+      else if (e.key === 'F2') { e.preventDefault(); run('tournament'); }
+      else if (e.key === 'F9') { e.preventDefault(); runExport(); }
+      else if (e.key === 'Escape') { e.preventDefault(); showDetect ? setShowDetect(false) : runClear(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [running, selVecs, squadSize, generations, nBenign, profile, showDetect]);
 
   const cols = useMemo(() => ledger.slice(0, 24), [ledger]);
 
   return (
-    <div className="min-h-screen bg-black text-amber-500 font-mono text-[12px] leading-[1.35] flex flex-col select-none" style={{ fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+    <div className="min-h-screen bg-black text-amber-500 font-mono text-[12px] leading-[1.35] flex flex-col select-none relative" style={{ fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+      {showDetect && (
+        <div className="absolute inset-0 z-50 bg-black/80 flex items-start justify-center pt-12" onClick={() => setShowDetect(false)}>
+          <div className="bg-[#0a0a0a] border border-[#FF8C00] w-[560px] max-w-[92vw]" onClick={e => e.stopPropagation()}>
+            <div className="h-[24px] bg-[#FF8C00] text-black px-2 flex items-center justify-between font-black text-[11px] tracking-widest">
+              <span>DETECT  -  SCORE TRANSACTIONS WITH LIVE ENSEMBLE</span>
+              <button onClick={() => setShowDetect(false)} className="px-2 hover:bg-black hover:text-[#FF8C00]">X</button>
+            </div>
+            <div className="p-2">
+              <textarea value={detectInput} onChange={e=>setDetectInput(e.target.value)}
+                className="w-full h-[140px] bg-black border border-[#333] text-[#FF8C00] p-2 text-[11px] font-mono outline-none" />
+              <button onClick={runDetect} className="w-full mt-2 bg-[#FF8C00] text-black py-[4px] font-black">SCORE  &lt;GO&gt;</button>
+              {detectOut && (
+                detectOut.error ? <div className="mt-2 text-red-500 text-[11px]">ERR {detectOut.error}</div> : (
+                  <div className="mt-2 text-[11px]">
+                    <div className="text-[#666] mb-1">blue={detectOut.blue_version}  threshold={detectOut.threshold}  {detectOut.latency_ms?.total}ms</div>
+                    <table className="w-full">
+                      <thead><tr className="text-[#666] text-left"><th>TXN</th><th>FLAGGED</th><th>FUSED</th><th>NOVELTY</th></tr></thead>
+                      <tbody>
+                        {detectOut.results.map(r => (
+                          <tr key={r.txn_id}>
+                            <td className="truncate max-w-[140px]">{r.txn_id}</td>
+                            <td className={r.flagged ? 'text-red-500 font-bold' : 'text-[#00FF00]'}>{String(r.flagged)}</td>
+                            <td>{r.fused_score}</td>
+                            <td>{r.novelty_flag ? 'YES' : 'no'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* TOP BAR  -  LiveFire style */}
       <div className="h-[28px] bg-[#FF8C00] text-black flex items-center px-2 gap-3 font-black tracking-widest text-[11px] shrink-0">
-        <span className="bg-black text-[#FF8C00] px-2 py-[1px]">LIVEFIRE</span>
+        <svg viewBox="0 0 780 230" style={{ height: 20, width: 'auto' }} aria-label="LiveFire">
+          <text x="8" y="178" fontFamily="'Helvetica Neue', Arial, sans-serif" fontSize="172" fontWeight="800" letterSpacing="-6" fill="#000000">Li</text>
+          <text x="772" y="178" fontFamily="'Helvetica Neue', Arial, sans-serif" fontSize="172" fontWeight="800" letterSpacing="-6" fill="#000000" textAnchor="end">eFire</text>
+          <g transform="translate(185,18) scale(1.55,2.55)">
+            <path d="M43 75 42.7 75C41.4 74.9 40.3 73.9 40 72.6L33.1 36 28.8 49C28.4 50.2 27.3 51 26 51L8 51 8 45 23.8 45 31.1 23.1C31.5 21.8 32.8 21 34.1 21.1 35.4 21.2 36.6 22.2 36.8 23.5L43.8 61 54 34C54.5 32.8 55.6 32 56.9 32.1 58.2 32.2 59.3 33 59.7 34.3L65.4 53 71.8 46C72.4 45.4 73.2 45 74 45L88 45 88 51 75.3 51 66.2 61C65.5 61.8 64.4 62.1 63.3 61.9 62.2 61.7 61.4 60.9 61.1 59.8L56.6 44.4 45.8 73.1C45.4 74.2 44.2 75 43 75Z" fill="#000000"/>
+          </g>
+        </svg>
         <span>CODE0710</span>
         <span className="opacity-60">|</span>
         <span className="font-mono font-bold">{now.toLocaleDateString('en-GB')} {now.toLocaleTimeString('en-GB')}</span>
@@ -102,16 +192,37 @@ export default function LiveFire() {
         </span>
       </div>
 
-      {/* FUNCTION KEYS */}
+      {/* FUNCTION KEYS -- real buttons + real keyboard shortcuts (see the keydown effect above) */}
       <div className="h-[22px] bg-[#1a1a1a] border-y border-[#333] flex items-center px-1 gap-[2px] text-[10px] shrink-0">
         {[
-          ['F1', 'RUN'], ['F2', 'TOUR'], ['F9', 'EXPORT'], ['ESC', 'CLEAR'],
-        ].map(([k, v]) => (
-          <span key={k} className="flex items-center gap-1 px-2 py-[2px] bg-black border border-[#333]">
+          ['F1', 'RUN', () => run('round'), running],
+          ['F2', 'TOUR', () => run('tournament'), running],
+          ['F9', 'EXPORT', runExport, false],
+          ['ESC', 'CLEAR', runClear, false],
+        ].map(([k, v, fn, dis]) => (
+          <button key={k} onClick={fn} disabled={dis} title={`Keyboard: ${k}`}
+            className="flex items-center gap-1 px-2 py-[2px] bg-black border border-[#333] hover:border-[#FF8C00] hover:bg-[#161200] disabled:opacity-40 disabled:cursor-wait cursor-pointer">
             <span className="bg-[#FF8C00] text-black px-1 font-black">{k}</span> {v}
-          </span>
+          </button>
         ))}
+        <button onClick={() => setShowDetect(s => !s)} title="Score custom transactions"
+          className={`flex items-center gap-1 px-2 py-[2px] border cursor-pointer ${showDetect ? 'bg-[#FF8C00] text-black border-[#FF8C00]' : 'bg-black border-[#333] hover:border-[#FF8C00] hover:bg-[#161200]'}`}>
+          <span className={showDetect ? 'bg-black text-[#FF8C00] px-1 font-black' : 'bg-[#FF8C00] text-black px-1 font-black'}>F10</span> DETECT
+        </button>
         <span className="ml-auto text-[#666]">VECTORS {vectors.length}  -  LEDGER {health?.ledger_campaigns || 0}  -  PROFILE {profile}  -  TYPE HELP &lt;GO&gt;</span>
+      </div>
+
+      {/* VECTOR SELECT -- which vectors the next RUN/TOUR fields (last selected = held out) */}
+      <div className="h-[24px] bg-[#111] border-b border-[#333] flex items-center px-1 gap-1 text-[10px] shrink-0 overflow-x-auto">
+        <span className="text-[#666] px-1 shrink-0">VECTORS</span>
+        {vectors.map(v => (
+          <button key={v.id} onClick={() => toggleVec(v.id)}
+            title={v.name}
+            className={`shrink-0 px-1.5 py-[1px] border font-mono ${selVecs.has(v.id) ? 'bg-[#FF8C00] text-black border-[#FF8C00] font-black' : 'bg-black text-[#666] border-[#333] hover:border-[#555]'}`}>
+            {v.id}
+          </button>
+        ))}
+        <span className="text-[#444] shrink-0 ml-1">({selVecs.size || 'all'} selected, last = held-out)</span>
       </div>
 
       <div className="flex-1 grid grid-cols-12 gap-[1px] bg-[#222] p-[1px] min-h-0">
@@ -145,13 +256,25 @@ export default function LiveFire() {
           </div>
           <div className="h-[20px] bg-[#111] border-t border-[#333] flex items-center px-2 gap-2 text-[10px]">
             <button onClick={() => run('round')} disabled={running} className="bg-[#FF8C00] text-black px-3 py-[2px] font-black disabled:opacity-50">F1 RUN</button>
-            <button onClick={() => run('tournament')} disabled={running} className="bg-black border border-[#FF8C00] text-[#FF8C00] px-3 py-[2px] font-black disabled:opacity-50">F2 TOURNAMENT (10 - )</button>
+            <button onClick={() => run('tournament')} disabled={running} className="bg-black border border-[#FF8C00] text-[#FF8C00] px-3 py-[2px] font-black disabled:opacity-50">F2 TOURNAMENT ({squadSize}&times;{generations})</button>
             <select value={profile} onChange={e=>setProfile(e.target.value)} className="bg-black border border-[#333] text-[#FF8C00] px-2 py-[2px] outline-none">
               <option value="card_intl">CARD_INTL</option>
               <option value="eu_psd2">EU_PSD2</option>
               <option value="us_cnp">US_CNP</option>
               <option value="upi_in">UPI_IN</option>
             </select>
+            <label className="flex items-center gap-1 text-[#666]">BENIGN
+              <input type="number" min={400} max={20000} step={200} value={nBenign} onChange={e=>setNBenign(+e.target.value)}
+                className="w-16 bg-black border border-[#333] text-[#FF8C00] px-1 py-[1px] outline-none" />
+            </label>
+            <label className="flex items-center gap-1 text-[#666]">SQUAD
+              <input type="number" min={2} max={32} value={squadSize} onChange={e=>setSquadSize(+e.target.value)}
+                className="w-10 bg-black border border-[#333] text-[#FF8C00] px-1 py-[1px] outline-none" />
+            </label>
+            <label className="flex items-center gap-1 text-[#666]">GENS
+              <input type="number" min={1} max={5} value={generations} onChange={e=>setGenerations(+e.target.value)}
+                className="w-10 bg-black border border-[#333] text-[#FF8C00] px-1 py-[1px] outline-none" />
+            </label>
             <span className="ml-auto text-[#555]">DETECT LAT {health?.detect_latency_ms ? `${health.detect_latency_ms.p50_ms}/${health.detect_latency_ms.p99_ms}ms` : ' - '}  -  LLM {health?.llm_configured ? 'ON' : 'OFF'}</span>
           </div>
         </div>
@@ -235,7 +358,7 @@ export default function LiveFire() {
           placeholder="TYPE COMMAND  -  HELP | RUN | TOUR | PROFILE | EXPORT   -  ENTER <GO>"
           className="flex-1 bg-transparent outline-none text-[#FF8C00] placeholder:text-[#444] font-mono text-[12px]"
         />
-        <span className="bg-[#FF8C00] text-black px-2 py-[1px] font-black text-[10px]">GO</span>
+        <button onClick={submitCmd} className="bg-[#FF8C00] text-black px-2 py-[1px] font-black text-[10px] hover:bg-white">GO</button>
         <span className="text-[#444] text-[10px] hidden sm:inline">LIVEFIRE TERMINAL  -  LIVEFIRE  -  CODE0710</span>
       </div>
     </div>
