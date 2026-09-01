@@ -159,6 +159,11 @@ LEDGER    every campaign + round persisted; multi-rail replay; CSV export
 
 We also report `pr_auc` and `recall@FPR≤0.001` with **realized** (not nominal) FPR.
 
+**Fidelity — is "real-corpus anchored" actually true?** `evidence/fidelity_report.json` (`python -m defense.fidelity`):
+- **Distinguisher AUC 0.5693** — a classifier trained to tell real ULB rows apart from LiveFire's synthetic benign rows (on amount + hour-of-day) barely beats chance. 0.5 = indistinguishable, 1.0 = trivially separable.
+- KS statistic on amount: **0.0587** (distributions close); on hour-of-day: **0.1495** (looser — reported as-is, not smoothed over)
+- This is a measurement, not an assertion: a generator that only reproduced marginals while destroying joint structure would still show up here, because the distinguisher is free to find whatever actually separates the two distributions rather than a fixed statistic we picked in advance
+
 ## Where this sits in a real Mastercard transaction
 
 Named checkpoints, not a vague "we integrate with Mastercard" line:
@@ -201,12 +206,13 @@ Tracked research, not yet wired into generation/detection (not padded into the t
 
 **Evidence committed:**
 - `defense/models/metadata/ulb_backbone_metrics.json` (now with the capture-clock ablation)
-- `evidence/breakthrough_report_seed71*.json`, `evidence/live_tournament_3gen_seed909.json`
+- `evidence/breakthrough_report_seed71*.json`, `evidence/live_tournament_3gen_seed909.json`, `evidence/fidelity_report.json`
 - `CHANGELOG.md`, `docs/AUDIT.md`
 
 **Reproducibility:**
 - Every weave seeded, every split `SEED=710`, XGB `n_jobs=1` pinned
 - `tests/calib_sweep.py` reproduces the calibration table
+- `python -m defense.fidelity` reproduces the fidelity report
 - `tests/test_e2e.py` is 6/6 green with zero LLM calls
 
 **Path to production:**

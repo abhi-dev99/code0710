@@ -1,0 +1,11 @@
+{
+  "n_real": 4000,
+  "n_synthetic": 4000,
+  "seed": 710,
+  "amount_ks_statistic": 0.0587,
+  "amount_ks_pvalue": 2.0060812375876335e-06,
+  "hour_of_day_ks_statistic": 0.1495,
+  "hour_of_day_ks_pvalue": 2.1559487902652225e-39,
+  "distinguisher_auc": 0.5693,
+  "reading": "distinguisher_auc near 0.5 = a classifier cannot tell real ULB rows from LiveFire's synthetic benign rows on (amount, hour); near 1.0 = trivially separable. KS statistics near 0 = distributions match; near 1 = disjoint. This is a real check on the 'real-corpus anchored' claim, not an assumption of it -- reported honestly even where it is unflattering."
+}
