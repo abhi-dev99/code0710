@@ -46,13 +46,11 @@ Static fraud models lose to adaptive attackers. LiveFire closes the loop:
 ## Screenshots
 
 <table>
-<tr><td align="center"><b>Dashboard</b> — <code>localhost:8000</code></td></tr>
-<tr><td><img src="docs/assets/dashboard-screenshot.png" alt="LiveFire dashboard: live ledger, round history, per-vector report card, live ensemble scoring"></td></tr>
-<tr><td align="center"><b>LiveFire Terminal</b> — <code>localhost:3000</code>, React/Vite/Tailwind, amber-on-black</td></tr>
-<tr><td><img src="docs/assets/terminal-screenshot.png" alt="LiveFire Terminal: dense keyboard-driven blotter view of the same live arena"></td></tr>
+<tr><td align="center"><b>LiveFire Terminal</b> — one frontend, React/Vite/Tailwind, amber-on-black</td></tr>
+<tr><td><img src="docs/assets/terminal-screenshot.png" alt="LiveFire Terminal: dense keyboard-driven blotter view of the live arena"></td></tr>
 </table>
 
-Both surfaces talk to the same live API and the same running ensemble — the terminal isn't a mockup, it's a second client.
+The Terminal is the only frontend — a plain HTML dashboard existed earlier and is now deprecated (removed, not just unlinked) in favor of one real surface with real screens: the blotter, a full taxonomy browser, a rail-profile browser, a multi-rail comparison, and the real-backbone credibility numbers, all keyboard-driven.
 
 ## Quick Start
 
@@ -62,7 +60,7 @@ python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-**2. Configure the LLM (optional — the product runs without it, templates fill in)**
+**2. Configure the LLM (optional — the product runs without it, templates fill in; or set it live later via the Terminal's Settings panel)**
 ```bash
 copy config\settings.example.env .env
 ```
@@ -79,19 +77,21 @@ python tests\test_e2e.py
 ```
 → 6/6 passing
 
-**5. Start the API + dashboard**
-```bash
-uvicorn app.api:app --port 8000
-```
-→ http://localhost:8000 (or: `docker compose up --build`)
-
-**6. Start the terminal UI** — optional second surface, talks to the same API on `:8000`
+**5. Build the Terminal** — the API serves this build directly; there is no separate frontend server in production
 ```bash
 cd app\frontend
 npm install
-npm run dev
+npm run build
+cd ..\..
 ```
-→ http://localhost:3000
+
+**6. Start the API** — this is now the one URL: the Terminal *and* every endpoint
+```bash
+uvicorn app.api:app --port 8000
+```
+→ http://localhost:8000 (or: `docker compose up --build`, which builds the Terminal for you — see the Dockerfile's frontend build stage)
+
+**Iterating on the UI itself?** Skip step 5 and run `npm run dev` inside `app/frontend` instead — a hot-reloading dev server on `:3000` that talks to the same API on `:8000` via CORS. Switch back to the built version (step 5) when you're done.
 
 **Key endpoints once the API is running:**
 

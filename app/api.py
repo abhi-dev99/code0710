@@ -2,7 +2,8 @@
 LiveFire API — serves the arena as a product.
 
 Endpoints:
-  GET  /                  -> web UI (static/index.html)
+  GET  /                  -> the LiveFire Terminal (React, built to app/frontend/dist)
+                             the plain dashboard is deprecated -- this is the one frontend now
   GET  /api/health        -> liveness + component status
   GET  /api/vectors       -> attack taxonomy
   GET  /api/profiles      -> rail profiles
@@ -96,7 +97,7 @@ def _load_persisted_ensemble() -> bool:
 
 ENSEMBLE_RELOADED = _load_persisted_ensemble()
 
-# ---- lazy red-team LLM client: the dashboard's use_llm checkbox must actually
+# ---- lazy red-team LLM client: a frontend's use_llm checkbox must actually
 # reach the planner (audit finding: use_llm was silently a no-op via the API) ----
 _llm_client: Any = None
 _llm_tried = False
@@ -150,13 +151,29 @@ class TournamentRequest(BaseModel):
     generations: int = Field(default=2, ge=1, le=5)
 
 
-@app.get("/")
-def index() -> FileResponse:
-    return FileResponse(_ROOT / "app" / "static" / "index.html")
-
-
 _TERMINAL_DIR = _ROOT / "app" / "frontend" / "dist"
+_TERMINAL_INDEX = _TERMINAL_DIR / "index.html"
+
+
+@app.get("/")
+def index() -> Response:
+    """The terminal is the one frontend now (the plain dashboard is
+    deprecated -- app/static/index.html was removed, not just unlinked).
+    Falls back to a build-it message instead of silently serving something
+    else when a clean checkout hasn't run `npm run build` yet."""
+    if _TERMINAL_INDEX.exists():
+        return FileResponse(_TERMINAL_INDEX)
+    return Response(
+        "LiveFire Terminal isn't built yet.\n\n"
+        "Run: cd app/frontend && npm install && npm run build\n"
+        "Then reload this page.",
+        media_type="text/plain", status_code=503,
+    )
+
+
 if _TERMINAL_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(_TERMINAL_DIR / "assets")), name="terminal-assets")
+    # kept for anyone with the old deploy-prep /terminal link already bookmarked
     app.mount("/terminal", StaticFiles(directory=str(_TERMINAL_DIR), html=True), name="terminal")
 
 _STATIC_DIR = _ROOT / "app" / "static"
