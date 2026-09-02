@@ -31,10 +31,11 @@ export default function LiveFire() {
   const [llmApiKey, setLlmApiKey] = useState('');
   const [llmModel, setLlmModel] = useState('google/gemini-3-flash-preview');
   const [llmOut, setLlmOut] = useState(null);
-  const [screen, setScreen] = useState('blotter'); // 'blotter' | 'taxonomy' | 'rails' | 'multirail'
+  const [screen, setScreen] = useState('blotter'); // 'blotter' | 'taxonomy' | 'rails' | 'multirail' | 'realdata'
   const [multiRail, setMultiRail] = useState(null);
   const [multiRailBusy, setMultiRailBusy] = useState(false);
   const [profiles, setProfiles] = useState({});
+  const [realMetrics, setRealMetrics] = useState(null);
   const inputRef = useRef(null);
 
   // clock
@@ -64,6 +65,11 @@ export default function LiveFire() {
     fetchAll();
     const id = setInterval(fetchAll, 2500);
     return () => clearInterval(id);
+  }, []);
+
+  // real-backbone credibility metrics never change at runtime -- fetch once, not on the hot poll
+  useEffect(() => {
+    fetch(`${API}/api/real-metrics`).then(r => r.ok ? r.json() : null).then(setRealMetrics).catch(() => setRealMetrics(null));
   }, []);
 
   const toggleVec = (id) => setSelVecs(prev => {
@@ -167,7 +173,7 @@ export default function LiveFire() {
 
   // real keyboard-driven controls, matching the F-key badges shown in the UI
   useEffect(() => {
-    const fkeys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F9', 'F10', 'F11', 'Escape'];
+    const fkeys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F9', 'F10', 'F11', 'Escape'];
     const onKey = (e) => {
       if (document.activeElement === inputRef.current && !fkeys.includes(e.key)) return;
       if (e.key === 'F1') { e.preventDefault(); run('round'); }
@@ -175,6 +181,7 @@ export default function LiveFire() {
       else if (e.key === 'F3') { e.preventDefault(); setScreen('taxonomy'); }
       else if (e.key === 'F4') { e.preventDefault(); setScreen('rails'); }
       else if (e.key === 'F5') { e.preventDefault(); setScreen('multirail'); if (!multiRail) runMultiRailScreen(); }
+      else if (e.key === 'F6') { e.preventDefault(); setScreen('realdata'); }
       else if (e.key === 'F9') { e.preventDefault(); runExport(); }
       else if (e.key === 'F10') { e.preventDefault(); setShowDetect(s => !s); }
       else if (e.key === 'F11') { e.preventDefault(); setShowSettings(s => !s); }
@@ -294,12 +301,13 @@ export default function LiveFire() {
           ['F3', 'TAXONOMY', () => setScreen('taxonomy'), false],
           ['F4', 'RAILS', () => setScreen('rails'), false],
           ['F5', 'MULTI-RAIL', () => { setScreen('multirail'); if (!multiRail) runMultiRailScreen(); }, false],
+          ['F6', 'REAL DATA', () => setScreen('realdata'), false],
           ['F9', 'EXPORT', runExport, false],
           ['ESC', 'CLEAR', runClear, false],
         ].map(([k, v, fn, dis]) => (
           <button key={k} onClick={fn} disabled={dis} title={`Keyboard: ${k}`}
             className={`flex items-center gap-1 px-2 py-[2px] border cursor-pointer disabled:opacity-40 disabled:cursor-wait ${
-              (k === 'F3' && screen === 'taxonomy') || (k === 'F4' && screen === 'rails') || (k === 'F5' && screen === 'multirail')
+              (k === 'F3' && screen === 'taxonomy') || (k === 'F4' && screen === 'rails') || (k === 'F5' && screen === 'multirail') || (k === 'F6' && screen === 'realdata')
                 ? 'bg-[#FF8C00] text-black border-[#FF8C00]' : 'bg-black border-[#333] hover:border-[#FF8C00] hover:bg-[#161200]'}`}>
             <span className="bg-[#FF8C00] text-black px-1 font-black">{k}</span> {v}
           </button>
@@ -327,7 +335,7 @@ export default function LiveFire() {
         ))}
         <span className="text-[#444] shrink-0 ml-1">({selVecs.size || 'all'} selected, last = held-out)</span>
         <span className="ml-auto shrink-0 flex gap-1">
-          {['blotter', 'taxonomy', 'rails', 'multirail'].map(s => (
+          {['blotter', 'taxonomy', 'rails', 'multirail', 'realdata'].map(s => (
             <button key={s} onClick={() => { setScreen(s); if (s === 'multirail' && !multiRail) runMultiRailScreen(); }}
               className={`px-2 py-[1px] border uppercase ${screen === s ? 'bg-[#FF8C00] text-black border-[#FF8C00] font-black' : 'bg-black text-[#666] border-[#333]'}`}>
               {s}
@@ -403,6 +411,46 @@ export default function LiveFire() {
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+      )}
+
+      {screen === 'realdata' && (
+        <div className="flex-1 bg-black overflow-auto min-h-0 p-2">
+          <div className="text-[#FF8C00] text-[10px] font-bold tracking-widest mb-2">REAL DATA  -  ULB HOLDOUT, NO SYNTHETIC (HONEST CREDIBILITY NUMBER)</div>
+          {!realMetrics ? (
+            <div className="text-[#444] p-4 text-center">NOT TRAINED YET -- RUN: python defense/train_real_backbone.py</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="border border-[#333] p-3 text-center">
+                  <div className="text-[24px] font-black text-[#00FF00]">{realMetrics.roc_auc}</div>
+                  <div className="text-[10px] text-[#666] tracking-widest mt-1">ROC-AUC</div>
+                </div>
+                <div className="border border-[#333] p-3 text-center">
+                  <div className="text-[24px] font-black text-[#FF8C00]">{realMetrics.average_precision}</div>
+                  <div className="text-[10px] text-[#666] tracking-widest mt-1">AVG PRECISION</div>
+                </div>
+                <div className="border border-[#333] p-3 text-center">
+                  <div className="text-[24px] font-black">{(realMetrics.n_test / 1000).toFixed(0)}k</div>
+                  <div className="text-[10px] text-[#666] tracking-widest mt-1">REAL TEST TXNS</div>
+                </div>
+              </div>
+              <div className="text-[11px] text-[#999] mb-3 leading-[1.4]">{realMetrics.honesty_note}</div>
+              {realMetrics.capture_clock_ablation && (
+                <div className="border-l-2 border-[#FF8C00] pl-2 text-[11px] text-[#999] mb-3 leading-[1.4]">
+                  <span className="text-[#FF8C00] font-bold">CAPTURE-CLOCK ABLATION  -  </span>
+                  {realMetrics.capture_clock_ablation.note}
+                  <div className="font-mono text-[#666] mt-1">
+                    with time: ROC {realMetrics.capture_clock_ablation.roc_auc_with_time} / AP {realMetrics.capture_clock_ablation.average_precision_with_time}
+                    {'   '}without: ROC {realMetrics.capture_clock_ablation.roc_auc_without_time} / AP {realMetrics.capture_clock_ablation.average_precision_without_time}
+                  </div>
+                </div>
+              )}
+              <div className="text-[10px] text-[#555] font-mono">
+                dataset={realMetrics.dataset}  n_train={realMetrics.n_train}  seed={realMetrics.seed}  artifact={realMetrics.artifact}
+              </div>
+            </>
           )}
         </div>
       )}
